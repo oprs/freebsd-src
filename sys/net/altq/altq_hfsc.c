@@ -721,7 +721,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	while (cl == NULL && i < MAXQ) {
 	  if (ifq[i].altq_inuse) {
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
-	    IFQ_LOCK_ASSERT(ifq[i]);
+	    IFQ_LOCK_ASSERT(&ifq[i]);
 
 	    /* grab class set by classifier */
 	    if ((m->m_flags & M_PKTHDR) == 0) {
