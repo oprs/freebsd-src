@@ -129,7 +129,7 @@ struct pf_altq_v0 {
 	void			*unused1;
 	TAILQ_ENTRY(pf_altq_v0)	 entries;
 
-  
+
 	/* scheduler spec */
 	uint8_t			 scheduler;	/* scheduler type */
 	uint16_t		 tbrsize;	/* tokenbucket regulator size */
@@ -187,8 +187,7 @@ struct pf_altq_v1 {
 
 	uint32_t		 qid;		/* return value */
 
-        uint8_t                 altq_index;     /* SKON: add an index for multiple queue sets */
-
+	uint8_t                 altq_index;     /* SKON: add an index for multiple queue sets */
 };
 
 /* Latest version of struct pf_altq_vX */
@@ -225,9 +224,8 @@ struct pf_kaltq {
 	} pq_u;
 
 	uint32_t		 qid;		/* return value */
-  
-        uint8_t                 altq_index;     /* SKON: add an index for multiple queue sets */
- 
+
+	uint8_t                 altq_index;     /* SKON: add an index for multiple queue sets */
 };
 #endif /* _KERNEL */
 

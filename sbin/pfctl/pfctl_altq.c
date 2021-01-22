@@ -60,7 +60,7 @@ static struct hsearch_data queue_map;
 static struct hsearch_data if_map;
 static struct hsearch_data qid_map;
 
-// Skon - add index                                         
+// Skon - add index
 static struct pfctl_altq *pfaltq_lookup(char *ifname, uint8_t index);
 //static struct pfctl_altq *pfaltq_lookup(char *ifname);
 
@@ -139,21 +139,21 @@ pfaltq_store(struct pf_altq *a)
 	ENTRY			*ret_item;
 	size_t			 key_size;
 	// skon
-        printf("pfaltq_store: %s, %s, %d\n",a->ifname,a->qname,a->altq_index);
-	
+	printf("pfaltq_store: %s, %s, %d\n",a->ifname,a->qname,a->altq_index);
+
 	if ((altq = malloc(sizeof(*altq))) == NULL)
 		err(1, "queue malloc");
 	memcpy(&altq->pa, a, sizeof(struct pf_altq));
 	memset(&altq->meta, 0, sizeof(altq->meta));
 
 	if (a->qname[0] == 0) {
-                // Skon - include index with ifname                                     
-                key_size = sizeof(a->ifname);
-                if ((item.key = malloc(key_size)) == NULL)
-                        err(1, "if map key malloc");
-                snprintf(item.key, key_size, "%s:%d",altq->pa.ifname,altq->pa.altq_index);
-                printf("pfaltq_store if key: %s\n",item.key);
-		
+		// Skon - include index with ifname
+		key_size = sizeof(a->ifname);
+		if ((item.key = malloc(key_size)) == NULL)
+			err(1, "if map key malloc");
+		snprintf(item.key, key_size, "%s:%d",altq->pa.ifname,altq->pa.altq_index);
+		printf("pfaltq_store if key: %s\n",item.key);
+
 	        //item.key = altq->pa.ifname;
 		item.data = altq;
 		if (hsearch_r(item, ENTER, &ret_item, &if_map) == 0)
@@ -161,7 +161,7 @@ pfaltq_store(struct pf_altq *a)
 		STAILQ_INSERT_TAIL(&interfaces, altq, meta.link);
 		printf("pfaltq_store: adding %s\n",item.key);
 	} else {
-	        // Skon - Add index to ifname 
+	        // Skon - Add index to ifname
 	        key_size = sizeof(a->ifname) + sizeof(a->qname)+2;
 		//	        key_size = sizeof(a->ifname) + sizeof(a->qname);
 
@@ -191,12 +191,12 @@ pfaltq_lookup(char *ifname, uint8_t index)
 {
 	ENTRY	 item;
 	ENTRY	*ret_item;
-        // Skon - Include index in search key                                           
-        size_t    key_size=sizeof(ifname);
-        if ((item.key = malloc(key_size)) == NULL)
-                        err(1, "if map key malloc");
-        snprintf(item.key, key_size, "%s:%d",ifname,index);
-        printf("pfaltq_lookup: %s\n",item.key);
+	// Skon - Include index in search key
+	size_t    key_size=sizeof(ifname);
+	if ((item.key = malloc(key_size)) == NULL)
+		err(1, "if map key malloc");
+	snprintf(item.key, key_size, "%s:%d",ifname,index);
+	printf("pfaltq_lookup: %s\n",item.key);
 	//item.key = ifname;
 	if (hsearch_r(item, FIND, &ret_item, &if_map) == 0)
 		return (NULL);
@@ -204,7 +204,7 @@ pfaltq_lookup(char *ifname, uint8_t index)
 	return (ret_item->data);
 }
 
-//  Skon - add index 
+//  Skon - add index
 static struct pfctl_altq *
 qname_to_pfaltq(const char *qname, const char *ifname, uint8_t index)
 {
@@ -215,8 +215,8 @@ qname_to_pfaltq(const char *qname, const char *ifname, uint8_t index)
 	item.key = key;
 	// Skon add index
 	//snprintf(item.key, sizeof(key), "%s:%s", ifname, qname);
-        snprintf(item.key, sizeof(key), "%s:%d:%s", ifname, index, qname);
-        printf("qname_to_pfaltq: %s\n",item.key);
+	snprintf(item.key, sizeof(key), "%s:%d:%s", ifname, index, qname);
+	printf("qname_to_pfaltq: %s\n",item.key);
 	if (hsearch_r(item, FIND, &ret_item, &queue_map) == 0)
 		return (NULL);
 
@@ -229,7 +229,7 @@ qname_to_qid(char *qname)
 	ENTRY	 item;
 	ENTRY	*ret_item;
 	uint32_t qid;
-	
+
 	/*
 	 * We guarantee that same named queues on different interfaces
 	 * have the same qid.
@@ -438,14 +438,14 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 
 	/* find the corresponding interface and copy fields used by queues */
 	/* Skon - add index */
-       	//if ((if_ppa = pfaltq_lookup(pa->ifname)) == NULL) {
+	//if ((if_ppa = pfaltq_lookup(pa->ifname)) == NULL) {
 	if ((if_ppa = pfaltq_lookup(pa->ifname,pa->altq_index)) == NULL) {
 		fprintf(stderr, "altq not defined on %s\n", pa->ifname);
 		return (1);
 	}
 	pa->scheduler = if_ppa->pa.scheduler;
 	pa->ifbandwidth = if_ppa->pa.ifbandwidth;
-	// Skon - include index in lookup 
+	// Skon - include index in lookup
 	//if (qname_to_pfaltq(pa->qname, pa->ifname) != NULL) {
 	if (qname_to_pfaltq(pa->qname, pa->ifname,pa->altq_index) != NULL) {
 		fprintf(stderr, "queue %s already exists on interface %s\n",
@@ -456,8 +456,8 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 
 	parent = NULL;
 	if (pa->parent[0] != 0) {
-	       // Skon - include index in lookup   
-	  //parent = qname_to_pfaltq(pa->parent, pa->ifname);
+		// Skon - include index in lookup
+		//parent = qname_to_pfaltq(pa->parent, pa->ifname);
 		parent = qname_to_pfaltq(pa->parent, pa->ifname,pa->altq_index);
 		if (parent == NULL) {
 			fprintf(stderr, "parent %s not found for %s\n",
@@ -509,7 +509,7 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 
 	if (parent != NULL)
 		parent->meta.children++;
-	
+
 	switch (pa->scheduler) {
 	case ALTQT_CBQ:
 		error = eval_pfqueue_cbq(pf, pa, if_ppa);
@@ -570,7 +570,7 @@ eval_pfqueue_cbq(struct pfctl *pf, struct pf_altq *pa, struct pfctl_altq *if_ppa
 		if_ppa->meta.root_classes++;
 	if (pa->pq_u.cbq_opts.flags & CBQCLF_DEFCLASS)
 		if_ppa->meta.default_classes++;
-	
+
 	cbq_compute_idletime(pf, pa);
 	return (0);
 }
@@ -818,7 +818,7 @@ eval_pfqueue_hfsc(struct pfctl *pf, struct pf_altq *pa, struct pfctl_altq *if_pp
 
 	if (pa->pq_u.hfsc_opts.flags & HFCF_DEFAULTCLASS)
 		if_ppa->meta.default_classes++;
-	
+
 	/* if link_share is not specified, use bandwidth */
 	if (opts->lssc_m2 == 0)
 		opts->lssc_m2 = pa->bandwidth;
@@ -848,7 +848,7 @@ eval_pfqueue_hfsc(struct pfctl *pf, struct pf_altq *pa, struct pfctl_altq *if_pp
 	 * be smaller than the interface bandwidth, and the upper-limit should
 	 * be larger than the real-time service curve when both are defined.
 	 */
-	
+
 	/* check the real-time service curve.  reserve 20% of interface bw */
 	if (opts->rtsc_m2 != 0) {
 		/* add this queue to the sum */
@@ -1307,7 +1307,7 @@ getifspeed(int pfdev, char *ifname)
 
 	bzero(&io, sizeof io);
 	if (strlcpy(io.ifname, ifname, IFNAMSIZ) >=
-	    sizeof(io.ifname)) 
+	    sizeof(io.ifname))
 		errx(1, "getifspeed: strlcpy");
 	if (ioctl(pfdev, DIOCGIFSPEED, &io) == -1)
 		err(1, "DIOCGIFSPEED");

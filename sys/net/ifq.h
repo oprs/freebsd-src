@@ -401,7 +401,7 @@ drbr_dequeue(struct ifnet *ifp, struct buf_ring *br)
 #ifdef ALTQ
 	struct mbuf *m;
 
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0])) {	
+	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
 		IFQ_DEQUEUE(&ifp->if_snd[0], m);
 		return (m);
 	}

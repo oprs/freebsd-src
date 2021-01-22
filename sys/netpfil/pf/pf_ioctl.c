@@ -472,7 +472,7 @@ pf_init_tagset(struct pf_tagset *ts, unsigned int *tunable_size,
 {
 	unsigned int i;
 	unsigned int hashsize;
-	
+
 	if (*tunable_size == 0 || !powerof2(*tunable_size))
 		*tunable_size = default_size;
 
@@ -559,7 +559,7 @@ tagname2tag(struct pf_tagset *ts, char *tagname)
 
 	/* Mark the tag as in use.  Bits are 0-based for BIT_CLR() */
 	BIT_CLR(TAGID_MAX, new_tagid - 1, &ts->avail);
-	
+
 	/* allocate and fill new struct pf_tagname */
 	tag = uma_zalloc(V_pf_tag_z, M_NOWAIT);
 	if (tag == NULL)
@@ -574,7 +574,7 @@ tagname2tag(struct pf_tagset *ts, char *tagname)
 	/* Insert into taghash */
 	index = tag2hashindex(ts, new_tagid);
 	TAILQ_INSERT_TAIL(&ts->taghash[index], tag, taghash_entries);
-	
+
 	return (tag->tag);
 }
 
@@ -583,7 +583,7 @@ tag_unref(struct pf_tagset *ts, u_int16_t tag)
 {
 	struct pf_tagname	*t;
 	uint16_t		 index;
-	
+
 	PF_RULES_WASSERT();
 
 	index = tag2hashindex(ts, tag);
@@ -750,7 +750,7 @@ pf_enable_altq(struct pf_altq *altq)
 
 	if (ifp->if_snd[0].altq_type != ALTQT_NONE) {
 	  // skon
-	  printf("pf_enable_altq: %s\n",altq->ifname); 
+	  printf("pf_enable_altq: %s\n",altq->ifname);
 		error = altq_enable(&ifp->if_snd[0]);
 	}
 	/* set tokenbucket regulator */
@@ -797,7 +797,7 @@ pf_altq_ifnet_event_add(struct ifnet *ifp, int remove, u_int32_t ticket,
 {
 	struct ifnet	*ifp1;
 	int		 error = 0;
-	
+
 	/* Deactivate the interface in question */
 	altq->local_flags &= ~PFALTQ_FLAG_IF_REMOVED;
 	if ((ifp1 = ifunit(altq->ifname)) == NULL ||
@@ -1157,7 +1157,7 @@ static int
 pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 {
 	u_int32_t version;
-	
+
 	if (ioc_size == sizeof(struct pfioc_altq_v0))
 		version = 0;
 	else
@@ -1198,7 +1198,7 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 #define ASSIGN_OPT(x) exported_q->pq_u.hfsc_opts.x = q->pq_u.hfsc_opts.x
 #define ASSIGN_OPT_SATU32(x) exported_q->pq_u.hfsc_opts.x = \
 			    SATU32(q->pq_u.hfsc_opts.x)
-			
+
 			ASSIGN_OPT_SATU32(rtsc_m1);
 			ASSIGN_OPT(rtsc_d);
 			ASSIGN_OPT_SATU32(rtsc_m2);
@@ -1212,7 +1212,7 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 			ASSIGN_OPT_SATU32(ulsc_m2);
 
 			ASSIGN_OPT(flags);
-			
+
 #undef ASSIGN_OPT
 #undef ASSIGN_OPT_SATU32
 		} else
@@ -1266,7 +1266,7 @@ static int
 pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 {
 	u_int32_t version;
-	
+
 	if (ioc_size == sizeof(struct pfioc_altq_v0))
 		version = 0;
 	else
@@ -1274,7 +1274,7 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 
 	if (version > PFIOC_ALTQ_VERSION)
 		return (EINVAL);
-	
+
 #define ASSIGN(x) q->x = imported_q->x
 #define COPY(x) \
 	bcopy(&imported_q->x, &q->x, min(sizeof(imported_q->x), sizeof(q->x)))
@@ -1320,7 +1320,7 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 			ASSIGN_OPT(ulsc_m2);
 
 			ASSIGN_OPT(flags);
-			
+
 #undef ASSIGN_OPT
 		} else
 			COPY(pq_u);
@@ -1352,14 +1352,14 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 		ASSIGN(qid);
 		break;
 	}
-	default:	
+	default:
 		panic("%s: unhandled struct pfioc_altq version", __func__);
 		break;
 	}
 
 #undef ASSIGN
 #undef COPY
-	
+
 	return (0);
 }
 
@@ -2480,7 +2480,7 @@ DIOCGETSTATES_full:
 		altq = malloc(sizeof(*altq), M_PFALTQ, M_WAITOK | M_ZERO);
 		error = pf_import_kaltq(pa, altq, IOCPARM_LEN(cmd));
 		// SKON - use local_flags to carry index
-                altq->altq_index=pa->altq.local_flags;
+		altq->altq_index=pa->altq.local_flags;
 
 		if (error)
 			break;
@@ -2508,12 +2508,12 @@ DIOCGETSTATES_full:
 			}
 			altq->altq_disc = NULL;
 			TAILQ_FOREACH(a, V_pf_altq_ifs_inactive, entries) {
-			  // Skon: change to look at BOTH interface and index
-			  printf("pf_ioctl.c: DIOCADDALTQV1 %s %d %s, %p\n",a->ifname,a->altq_index,a->qname,a->altq_disc);
-			  if (strncmp(a->ifname, altq->ifname, IFNAMSIZ) == 0 &&
-                              a->altq_index == altq->altq_index) {			  
-			    //if (strncmp(a->ifname, altq->ifname,
-			    //  IFNAMSIZ) == 0) {
+				//if (strncmp(a->ifname, altq->ifname,
+				//  IFNAMSIZ) == 0) {
+				// Skon: change to look at BOTH interface and index
+				printf("pf_ioctl.c: DIOCADDALTQV1 %s %d %s, %p\n",a->ifname,a->altq_index,a->qname,a->altq_disc);
+				if (strncmp(a->ifname, altq->ifname, IFNAMSIZ) == 0 &&
+				    a->altq_index == altq->altq_index) {
 					altq->altq_disc = a->altq_disc;
 					printf("Found Interface: %p, %s, %d\n",altq->altq_disc,altq->qname,altq->altq_index);
 					break;
@@ -2619,7 +2619,7 @@ DIOCGETSTATES_full:
 			version = pq->version;
 
 		error = altq_getqstats(altq, pq->buf, &nbytes, version);
-		printf("DIOCGETQSTATS 2: %d.\n",error); 
+		printf("DIOCGETQSTATS 2: %d.\n",error);
 		if (error == 0) {
 			pq->scheduler = altq->scheduler;
 			pq->nbytes = nbytes;
@@ -4485,7 +4485,7 @@ vnet_pf_init(void *unused __unused)
 
 	pf_load_vnet();
 }
-VNET_SYSINIT(vnet_pf_init, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD, 
+VNET_SYSINIT(vnet_pf_init, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD,
     vnet_pf_init, NULL);
 
 static void
@@ -4493,7 +4493,7 @@ vnet_pf_uninit(const void *unused __unused)
 {
 
 	pf_unload_vnet();
-} 
+}
 SYSUNINIT(pf_unload, SI_SUB_PROTO_FIREWALL, SI_ORDER_SECOND, pf_unload, NULL);
 VNET_SYSUNINIT(vnet_pf_uninit, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD,
     vnet_pf_uninit, NULL);
