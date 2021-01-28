@@ -744,20 +744,22 @@ pf_enable_altq(struct pf_altq *altq)
 	struct ifnet		*ifp;
 	struct tb_profile	 tb;
 	int			 error = 0;
+	uint8_t index = altq->altq_index;
 
 	if ((ifp = ifunit(altq->ifname)) == NULL)
 		return (EINVAL);
 
-	if (ifp->if_snd[0].altq_type != ALTQT_NONE) {
+	if (ifp->if_snd[index].altq_type != ALTQT_NONE) {
 	  // skon
-	  printf("pf_enable_altq: %s\n",altq->ifname); 
-		error = altq_enable(&ifp->if_snd[0]);
+	  printf("pf_enable_altq: %s %d\n",altq->ifname, index); 
+	  ifp->if_snd[index].altq_inuse=1;
+	  error = altq_enable(&ifp->if_snd[index]);
 	}
 	/* set tokenbucket regulator */
-	if (error == 0 && ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
+	if (error == 0 && ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[index])) {
 		tb.rate = altq->ifbandwidth;
 		tb.depth = altq->tbrsize;
-		error = tbr_set(&ifp->if_snd[0], &tb);
+		error = tbr_set(&ifp->if_snd[index], &tb);
 	}
 
 	return (error);
@@ -769,6 +771,7 @@ pf_disable_altq(struct pf_altq *altq)
 	struct ifnet		*ifp;
 	struct tb_profile	 tb;
 	int			 error;
+	int i = altq->altq_index;
 
 	if ((ifp = ifunit(altq->ifname)) == NULL)
 		return (EINVAL);
@@ -777,15 +780,15 @@ pf_disable_altq(struct pf_altq *altq)
 	 * when the discipline is no longer referenced, it was overridden
 	 * by a new one.  if so, just return.
 	 */
-	if (altq->altq_disc != ifp->if_snd[0].altq_disc)
+	if (altq->altq_disc != ifp->if_snd[i].altq_disc)
 		return (0);
 
-	error = altq_disable(&ifp->if_snd[0]);
+	error = altq_disable(&ifp->if_snd[i]);
 
 	if (error == 0) {
 		/* clear tokenbucket regulator */
 		tb.rate = 0;
-		error = tbr_set(&ifp->if_snd[0], &tb);
+		error = tbr_set(&ifp->if_snd[i], &tb);
 	}
 
 	return (error);

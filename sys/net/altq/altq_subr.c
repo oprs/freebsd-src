@@ -196,9 +196,8 @@ altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify, 
 	ifq->altq_clfier   = clfier;
 	ifq->altq_classify = classify;
 	ifq->altq_flags &= (ALTQF_CANTCHANGE|ALTQF_ENABLED);
-	// Skon - for use with multiple queue
+	// Skon - for use with multiple queues
 	ifq->altq_index = index;
-	ifq->altq_inuse = 1;
 	
 #ifdef ALTQ3_COMPAT
 #ifdef ALTQ_KLD
@@ -251,36 +250,33 @@ int
 altq_enable(ifq)
 	struct ifaltq *ifq;
 {
-  for (int i=0; i<MAXQ ; i++) {
-    // skon
-    printf("altq_enable:%d:%d:%d\n",i,ifq[i].altq_index,ifq[i].altq_inuse);
-    if (ifq[i].altq_inuse) {
+    uint8_t i=ifq->altq_index;
+    printf("altq_enable:%d:%d:%d:%p\n",i,ifq->altq_inuse,ALTQ_IS_ENABLED(ifq),ifq);
 
 	int s;
 
-	IFQ_LOCK(&ifq[i]);
+	IFQ_LOCK(ifq);
 
-	if (!ALTQ_IS_READY(&ifq[i])) {
-		IFQ_UNLOCK(&ifq[i]);
+	if (!ALTQ_IS_READY(ifq)) {
+		IFQ_UNLOCK(ifq);
 		return ENXIO;
 	}
-	if (ALTQ_IS_ENABLED(&ifq[i])) {
-		IFQ_UNLOCK(&ifq[i]);
-		break;
+	if (ALTQ_IS_ENABLED(ifq)) {
+		IFQ_UNLOCK(ifq);
+		return 0;
 	}
 
 	s = splnet();
-	IFQ_PURGE_NOLOCK(&ifq[i]);
-	ASSERT(ifq[i].ifq_len == 0);
-	ifq[i].ifq_drv_maxlen = 0;		/* disable bulk dequeue */
-	ifq[i].altq_flags |= ALTQF_ENABLED;
-	if (ifq[i].altq_clfier != NULL)
-		ifq[i].altq_flags |= ALTQF_CLASSIFY;
+	IFQ_PURGE_NOLOCK(ifq);
+	ASSERT(ifq.ifq_len == 0);
+	ifq->ifq_drv_maxlen = 0;		/* disable bulk dequeue */
+	ifq->altq_flags |= ALTQF_ENABLED;
+	if (ifq->altq_clfier != NULL)
+		ifq->altq_flags |= ALTQF_CLASSIFY;
 	splx(s);
 
-	IFQ_UNLOCK(&ifq[i]);
-    }
-  }
+	IFQ_UNLOCK(ifq);
+
 	return 0;
 }
 
@@ -341,6 +337,7 @@ tbr_dequeue(ifq, op)
 	u_int64_t now;
 
 	IFQ_LOCK_ASSERT(ifq);
+
 	tbr = ifq->altq_tbr;
 	if (op == ALTDQ_REMOVE && tbr->tbr_lastop == ALTDQ_POLL) {
 		/* if this is a remove after poll, bypass tbr check */
@@ -362,14 +359,16 @@ tbr_dequeue(ifq, op)
 		if (tbr->tbr_token <= 0)
 			return (NULL);
 	}
-
-	if (ALTQ_IS_ENABLED(ifq))
+	if (ALTQ_IS_ENABLED(ifq)) {
 		m = (*ifq->altq_dequeue)(ifq, op);
+	}
 	else {
-		if (op == ALTDQ_POLL)
+	  if (op == ALTDQ_POLL) {
 			_IF_POLL(ifq, m);
-		else
+	  }
+	  else {
 			_IF_DEQUEUE(ifq, m);
+	  }
 	}
 
 	if (m != NULL && op == ALTDQ_REMOVE)
@@ -388,7 +387,9 @@ tbr_set(ifq, profile)
 	struct tb_profile *profile;
 {
 	struct tb_regulator *tbr, *otbr;
-	
+
+	// Skon
+	printf("tbr_set: %d\n",ifq->altq_index);
 	if (tbr_dequeue_ptr == NULL)
 		tbr_dequeue_ptr = tbr_dequeue;
 
@@ -478,13 +479,20 @@ tbr_timeout(arg)
 		CURVNET_SET(vnet_iter);
 		for (ifp = CK_STAILQ_FIRST(&V_ifnet); ifp;
 		    ifp = CK_STAILQ_NEXT(ifp, if_link)) {
-			/* read from if_snd unlocked */
-			if (!TBR_IS_ENABLED(&ifp->if_snd[0]))
+		  // Skon - do for each altq instance
+		  for (int i=0; i<MAXQ ; i++) {
+		    if (ALTQ_IS_ENABLED(&ifp->if_snd[i])) { 
+		        /* read from if_snd unlocked */
+			if (!TBR_IS_ENABLED(&ifp->if_snd[i]))
 				continue;
 			active++;
-			if (!IFQ_IS_EMPTY(&ifp->if_snd[0]) &&
-			    ifp->if_start != NULL)
+			if (!IFQ_IS_EMPTY(&ifp->if_snd[i]) &&
+			    ifp->if_start != NULL) {
 				(*ifp->if_start)(ifp);
+				break; // Skon- Only need to kick once
+			    }
+		    }
+		  }
 		}
 		CURVNET_RESTORE();
 	}

@@ -2449,6 +2449,8 @@ if_qflush(struct ifnet *ifp)
 	for (int i = 0; i<MAXQ ; i++) {
 	  if (ifp->if_snd[i].altq_inuse)
 	    ifq = &ifp->if_snd[i];
+	  else
+	    continue;
 
 	  IFQ_LOCK(ifq);
 #ifdef ALTQ

@@ -136,6 +136,8 @@ struct tb_regulator {
 #define	ALTQF_ENABLED	 0x02	/* altq is in use */
 #define	ALTQF_CLASSIFY	 0x04	/* classify packets */
 #define	ALTQF_CNDTNING	 0x08	/* altq traffic conditioning is enabled */
+/* Skon busy bit for ALTQ */
+#define	ALTQF_BUSY	 0x10	/* altq is busy */
 #define	ALTQF_DRIVER1	 0x40	/* driver specific */
 
 /* if_altqflags set internally only: */
@@ -150,6 +152,11 @@ struct tb_regulator {
 
 #define	ALTQ_IS_READY(ifq)		((ifq)->altq_flags & ALTQF_READY)
 #ifdef ALTQ
+// Skon
+#define	ALTQ_IS_BUSY(ifq)		((ifq)->altq_flags & ALTQF_BUSY)
+#define	ALTQ_SET_BUSY(ifq)		((ifq)->altq_flags |= ALTQF_BUSY)
+#define	ALTQ_CLEAR_BUSY(ifq)	((ifq)->altq_flags &= ~ALTQF_BUSY)
+
 #define	ALTQ_IS_ENABLED(ifq)		((ifq)->altq_flags & ALTQF_ENABLED)
 #else
 #define	ALTQ_IS_ENABLED(ifq)		0

@@ -706,6 +706,7 @@ hfsc_nextclass(struct hfsc_class *cl)
  * hfsc_enqueue is an enqueue function to be registered to
  * (*altq_enqueue) in struct ifaltq.
  * Skon - assume ifq is actually an arrray of ifalt's to search for a matching class
+ * Must lock the ight ifaltq structure here
  */
 static int
 hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
@@ -721,8 +722,10 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	while (cl == NULL && i < MAXQ) {
 	  if (ifq[i].altq_inuse) {
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
-	    IFQ_LOCK_ASSERT(ifq[i]);
-
+	    //IFQ_LOCK_ASSERT(ifq[i]); // Skon: Removed
+	    // Add locking per queue
+	    IFQ_LOCK(&ifq[i]);
+	    
 	    /* grab class set by classifier */
 	    if ((m->m_flags & M_PKTHDR) == 0) {
 	      /* should not happen */
@@ -751,6 +754,8 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		//printf("ED%d:%d ",i,ifq[i].ifq_len);
 	      }
 	    }
+	    // Skon - add locking per queue
+	    IF_UNLOCK(&ifq[i]);
 	  }
 	  i++;
 	}
@@ -807,11 +812,11 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	u_int64_t cur_time;
 
 	IFQ_LOCK_ASSERT(ifq);
-	// Skon
-	//printf("D%d,%d ",ifq->altq_index,ifq->ifq_len);
 	if (hif->hif_packets == 0)
 		/* no packet in the tree */
 		return (NULL);
+	// Skon
+	//printf("D%d:%d",ifq->altq_index,hif->hif_packets);
 
 	cur_time = read_machclk();
 
@@ -868,6 +873,8 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			return (m);
 		}
 	}
+	// Skon
+	//printf("H%d:%d",ifq->altq_index,hif->hif_packets);
 
 	m = hfsc_getq(cl);
 	if (m == NULL)
@@ -895,8 +902,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 		/* the class becomes passive */
 		set_passive(cl);
 	}
-
-	return (m);
+	    return (m);
 }
 
 static int

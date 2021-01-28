@@ -161,9 +161,26 @@ int	if_handoff(struct ifqueue *ifq, struct mbuf *m, struct ifnet *ifp,
 
 void	if_start(struct ifnet *);
 
+// Skon - Must remove locking from here because we don;t yet know which queue to lock
 #define	IFQ_ENQUEUE(ifq, m, err)					\
 do {									\
-	IF_LOCK(ifq);							\
+	if (ALTQ_IS_ENABLED(ifq))					\
+		ALTQ_ENQUEUE(ifq, m, NULL, err);			\
+	else {								\
+	        IF_LOCK(ifq);                                           \
+		if (_IF_QFULL(ifq)) {					\
+			m_freem(m);					\
+			(err) = ENOBUFS;				\
+		} else {						\
+			_IF_ENQUEUE(ifq, m);				\
+			(err) = 0;					\
+		}							\
+		IF_UNLOCK(ifq);                                         \
+	}								\
+} while (0)
+/*#define	IFQ_ENQUEUE(ifq, m, err)				\
+do {									\
+        IF_LOCK(ifq);							\
 	if (ALTQ_IS_ENABLED(ifq))					\
 		ALTQ_ENQUEUE(ifq, m, NULL, err);			\
 	else {								\
@@ -177,7 +194,7 @@ do {									\
 	}								\
 	IF_UNLOCK(ifq);							\
 } while (0)
-
+*/
 #define	IFQ_DEQUEUE_NOLOCK(ifq, m)					\
 do {									\
 	if (TBR_IS_ENABLED(ifq))					\

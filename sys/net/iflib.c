@@ -4189,20 +4189,20 @@ iflib_altq_if_start(if_t ifp)
 	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
 
-	for (int i = 0; i < MAXQ; i++) {
 
+	for (int i = 0; i < MAXQ; i++) {
 	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]) &&
+	      !ALTQ_IS_BUSY(&ifq[i]) &&
 	      ifq[i].altq_inuse && ifq[i].ifq_len>0) {
-	    //printf("%d:%d ",i,ifq[i].ifq_len);
-	    //printf("Q%d:%d ",i,ifq[i].ifq_len);
-	    IFQ_LOCK(&ifq[i]);
+      	    IFQ_LOCK(&ifq[i]);
+	    ALTQ_SET_BUSY(&ifq[i]);
 	    IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
 	    while (m != NULL) {
-	      //printf("T%d ",i);
 	      iflib_if_transmit_altq(ifp, m, i);
 	      IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
 	    }
 	    IFQ_UNLOCK(&ifq[i]);
+	    ALTQ_CLEAR_BUSY(&ifq[i]);
 	  }
 	}
 }
