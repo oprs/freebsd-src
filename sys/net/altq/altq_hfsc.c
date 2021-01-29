@@ -186,7 +186,7 @@ hfsc_pfattach(struct pf_altq *a)
 int
 hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 {
-        struct hfsc_if *hif;
+	struct hfsc_if *hif;
 
 	if (ifp == NULL) {
 	  printf("EINVAL\n");
@@ -209,8 +209,8 @@ hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 	a->altq_disc = hif;
 	// Skon
 	printf("Add hfsc_if Intf: %s, idx: %d, qn: %s hfsc addr: %p\n", a->ifname, a->altq_index, a->qname, (void *)hif);
-        // Skon - add the root index to the ifaltq                                                   
-        ifp->if_snd[a->altq_index].altq_index=a->altq_index;
+	// Skon - add the root index to the ifaltq
+	ifp->if_snd[a->altq_index].altq_index=a->altq_index;
 	return (0);
 }
 
@@ -302,8 +302,8 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 	size_t stats_size;
 	int error = 0;
 	// Skon - add index
-        if ((hif = altq_lookup_indexed(a->ifname, a->altq_index, ALTQT_HFSC)) == NULL) {
-	  //	if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
+	if ((hif = altq_lookup_indexed(a->ifname, a->altq_index, ALTQT_HFSC)) == NULL) {
+	  // if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
 	  printf("hfsc_getqstats: hif: %p\n",hif);
 		return (EBADF);
 	}
@@ -325,7 +325,7 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 		get_class_stats_v1(&stats.v1, cl);
 		stats_size = sizeof(struct hfsc_classstats_v1);
 		break;
-	}		
+	}
 
 	if (*nbytes < stats_size)
 		return (EINVAL);
@@ -722,6 +722,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	while (cl == NULL && i < MAXQ) {
 	  if (ifq[i].altq_inuse) {
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
+
 	    //IFQ_LOCK_ASSERT(ifq[i]); // Skon: Removed
 	    // Add locking per queue
 	    IFQ_LOCK(&ifq[i]);
@@ -763,8 +764,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  cl=cl_d;
 	  q_idx=dq_idx;
 	}
-	
-	
+
 	if (cl == NULL) {
 	  m_freem(m);
 	  return (ENOBUFS);
@@ -1689,7 +1689,7 @@ get_class_stats_v0(struct hfsc_classstats_v0 *sp, struct hfsc_class *cl)
 	}
 
 #undef SATU32
-	
+
 	sp->total = cl->cl_total;
 	sp->cumul = cl->cl_cumul;
 

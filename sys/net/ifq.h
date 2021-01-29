@@ -266,7 +266,7 @@ do {									\
 									\
 	len = (m)->m_pkthdr.len;					\
 	mflags = (m)->m_flags;						\
-	IFQ_ENQUEUE(&(ifp)->if_snd[0], m, err);				\
+	IFQ_ENQUEUE((ifp)->if_snd, m, err);				\
 	if ((err) == 0) {						\
 		if_inc_counter((ifp), IFCOUNTER_OBYTES, len + (adj));	\
 		if (mflags & M_MCAST)					\
@@ -280,8 +280,25 @@ do {									\
 #define	IFQ_HANDOFF(ifp, m, err)					\
 	IFQ_HANDOFF_ADJ(ifp, m, 0, err)
 
-#define	IFQ_DRV_DEQUEUE(ifq, m)						\
-do {									\
+// Skon - find the altq with the longest queue
+#define IFQ_LONGEST(ifq,ifql)						\
+  int maxlen=0,maxq=0;  						\
+  struct ifaltq *q = ifq;						\
+  for (int i = 0; i < MAXQ; i++ ) {                                     \
+     if (ALTQ_IS_ENABLED(&q[i])) {					\
+         if (q[i].ifq_len > maxlen) {                                   \
+	     maxlen=q[i].ifq_len;                                       \
+	     maxq=i;                                                    \
+	 }                                                              \
+      }                                                                 \
+   }                                                                    \
+   (ifql)=&q[maxq];
+       
+// Skon: Fix to use the longest queue       
+#define	IFQ_DRV_DEQUEUE(ifqIn, m)   				      	\
+  do {                                                                  \
+        struct ifaltq *ifq;						\
+	IFQ_LONGEST(ifqIn,ifq)                                          \
 	(m) = (ifq)->ifq_drv_head;					\
 	if (m) {							\
 		if (((ifq)->ifq_drv_head = (m)->m_nextpkt) == NULL)	\
@@ -338,8 +355,8 @@ drbr_enqueue(struct ifnet *ifp, struct buf_ring *br, struct mbuf *m)
 	int error = 0;
 
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
-		IFQ_ENQUEUE(&ifp->if_snd[0], m, error);
+	if (ALTQ_IS_ENABLED(ifp->if_snd)) {
+		IFQ_ENQUEUE(ifp->if_snd, m, error);
 		if (error)
 			if_inc_counter((ifp), IFCOUNTER_OQDROPS, 1);
 		return (error);
@@ -360,12 +377,12 @@ drbr_putback(struct ifnet *ifp, struct buf_ring *br, struct mbuf *new)
 	 * for this one.
 	 */
 #ifdef ALTQ
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
+	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd)) {
 		/* 
 		 * Peek in altq case dequeued it
 		 * so put it back.
 		 */
-		IFQ_DRV_PREPEND(&ifp->if_snd[0], new);
+		IFQ_DRV_PREPEND(ifp->if_snd, new);
 		return;
 	}
 #endif
@@ -377,14 +394,14 @@ drbr_peek(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
 	struct mbuf *m;
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
+	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd)) {
 		/* 
 		 * Pull it off like a dequeue
 		 * since drbr_advance() does nothing
 		 * for altq and drbr_putback() will
 		 * use the old prepend function.
 		 */
-		IFQ_DEQUEUE(&ifp->if_snd[0], m);
+		IFQ_DEQUEUE(ifp->if_snd, m);
 		return (m);
 	}
 #endif
@@ -397,8 +414,8 @@ drbr_flush(struct ifnet *ifp, struct buf_ring *br)
 	struct mbuf *m;
 
 #ifdef ALTQ
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0]))
-		IFQ_PURGE(&ifp->if_snd[0]);
+	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd))
+		IFQ_PURGE(ifp->if_snd);
 #endif	
 	while ((m = buf_ring_dequeue_sc(br)) != NULL)
 		m_freem(m);
@@ -418,8 +435,8 @@ drbr_dequeue(struct ifnet *ifp, struct buf_ring *br)
 #ifdef ALTQ
 	struct mbuf *m;
 
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0])) {	
-		IFQ_DEQUEUE(&ifp->if_snd[0], m);
+	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd)) {
+		IFQ_DEQUEUE(ifp->if_snd, m);
 		return (m);
 	}
 #endif
@@ -431,7 +448,7 @@ drbr_advance(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
 	/* Nothing to do here since peek dequeues in altq case */
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[0]))
+	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd))
 		return;
 #endif
 	return (buf_ring_advance_sc(br));
@@ -444,15 +461,15 @@ drbr_dequeue_cond(struct ifnet *ifp, struct buf_ring *br,
 {
 	struct mbuf *m;
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
-		IFQ_LOCK(&ifp->if_snd[0]);
-		IFQ_POLL_NOLOCK(&ifp->if_snd[0], m);
+	if (ALTQ_IS_ENABLED(ifp->if_snd)) {
+		IFQ_LOCK(ifp->if_snd);
+		IFQ_POLL_NOLOCK(ifp->if_snd, m);
 		if (m != NULL && func(m, arg) == 0) {
-			IFQ_UNLOCK(&ifp->if_snd[0]);
+			IFQ_UNLOCK(ifp->if_snd);
 			return (NULL);
 		}
-		IFQ_DEQUEUE_NOLOCK(&ifp->if_snd[0], m);
-		IFQ_UNLOCK(&ifp->if_snd[0]);
+		IFQ_DEQUEUE_NOLOCK(ifp->if_snd, m);
+		IFQ_UNLOCK(ifp->if_snd);
 		return (m);
 	}
 #endif
@@ -467,8 +484,8 @@ static __inline int
 drbr_empty(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd[0]))
-		return (IFQ_IS_EMPTY(&ifp->if_snd[0]));
+	if (ALTQ_IS_ENABLED(ifp->if_snd))
+		return (IFQ_IS_EMPTY(ifp->if_snd));
 #endif
 	return (buf_ring_empty(br));
 }
@@ -477,7 +494,7 @@ static __inline int
 drbr_needs_enqueue(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd[0]))
+	if (ALTQ_IS_ENABLED(ifp->if_snd))
 		return (1);
 #endif
 	return (!buf_ring_empty(br));
@@ -487,8 +504,8 @@ static __inline int
 drbr_inuse(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd[0]))
-		return (ifp->if_snd[0].ifq_len);
+	if (ALTQ_IS_ENABLED(ifp->if_snd))
+		return (ifp->if_snd->ifq_len);
 #endif
 	return (buf_ring_count(br));
 }

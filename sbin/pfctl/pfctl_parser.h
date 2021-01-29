@@ -110,10 +110,10 @@ struct node_if {
 	u_int8_t		 dynamic; /* antispoof */
 	u_int			 ifa_flags;
 
-        struct node_if		*next;
+	struct node_if		*next;
 	struct node_if		*tail;
-        // SKON                                                                                         
-        u_int8_t                altq_index; // used for multiple root queues on same interface
+	// SKON
+	u_int8_t                altq_index; // used for multiple root queues on same interface
 };
 
 struct node_host {
