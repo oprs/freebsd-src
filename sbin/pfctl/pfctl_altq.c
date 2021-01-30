@@ -974,7 +974,9 @@ check_commit_hfsc(int dev, int opts, struct pfctl_altq *if_ppa)
 {
 
 	/* check if hfsc has one default queue for this interface */
-	if (if_ppa->meta.default_classes != 1) {
+        /* Skon - reduce to leass hen or equal to 1, must still check */
+        /* At least one across interface queues */
+	if (if_ppa->meta.default_classes > 1) {
 		warnx("should have one default queue on %s", if_ppa->pa.ifname);
 		return (1);
 	}

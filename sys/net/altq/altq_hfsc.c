@@ -733,6 +733,9 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	      printf("altq: packet for %s does not have pkthdr\n",
 		     ifq[i].altq_ifp->if_xname);
 	      m_freem(m);
+	      // Skon - unlock
+	      IFQ_UNLOCK(&ifq[i]);
+	      
 	      return (ENOBUFS);
 	    }
 	    // Skon
@@ -755,11 +758,12 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		//printf("ED%d:%d ",i,ifq[i].ifq_len);
 	      }
 	    }
-	    // Skon - add locking per queue
-	    IF_UNLOCK(&ifq[i]);
 	  }
+	  // Skon - unlock
+	  IFQ_UNLOCK(&ifq[i]);
 	  i++;
 	}
+	
 	if (cl==NULL && cl_d!=NULL) {
 	  cl=cl_d;
 	  q_idx=dq_idx;
@@ -767,8 +771,12 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 
 	if (cl == NULL) {
 	  m_freem(m);
+	  
 	  return (ENOBUFS);
 	}
+	// Skon - now lock the queue we used
+	IFQ_LOCK(&ifq[q_idx]);
+	
 #ifdef ALTQ3_COMPAT
 	if (pktattr != NULL)
 		cl->cl_pktattr = pktattr;  /* save proto hdr used by ECN */
@@ -780,6 +788,9 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  //printf("Drop%d ",q_idx);
 	  /* drop occurred.  mbuf was freed in hfsc_addq. */
 		PKTCNTR_ADD(&cl->cl_stats.drop_cnt, len);
+		/// Skon - unlock
+		IFQ_UNLOCK(&ifq[q_idx]);
+		
 		return (ENOBUFS);
 	}
 	IFQ_INC_LEN(&ifq[q_idx]);
@@ -788,6 +799,8 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	/* successfully queued. */
 	if (qlen(cl->cl_q) == 1)
 		set_active(cl, m_pktlen(m));
+	// Skon - add locking per queue
+	IFQ_UNLOCK(&ifq[q_idx]);
 
 	return (0);
 }
@@ -811,12 +824,13 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	int realtime = 0;
 	u_int64_t cur_time;
 
+
 	IFQ_LOCK_ASSERT(ifq);
 	if (hif->hif_packets == 0)
 		/* no packet in the tree */
 		return (NULL);
 	// Skon
-	//printf("D%d:%d",ifq->altq_index,hif->hif_packets);
+	//printf("B%d:%d",ifq->altq_index,hif->hif_packets);
 
 	cur_time = read_machclk();
 
@@ -853,6 +867,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 					if (fits > 0)
 						printf("%d fit but none found\n",fits);
 #endif
+				        //printf("N");
 					return (NULL);
 				}
 				/*
@@ -870,15 +885,18 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 		if (op == ALTDQ_POLL) {
 			hif->hif_pollcache = cl;
 			m = hfsc_pollq(cl);
+			//printf("P");
 			return (m);
 		}
 	}
 	// Skon
-	//printf("H%d:%d",ifq->altq_index,hif->hif_packets);
+	//printf("E");
 
 	m = hfsc_getq(cl);
-	if (m == NULL)
-		panic("hfsc_dequeue:");
+	if (m == NULL) {
+	  printf("DROP!%d,%d\n",ifq->altq_index,hif->hif_packets);
+	  panic("hfsc_dequeue:");
+	}
 	len = m_pktlen(m);
 	cl->cl_hif->hif_packets--;
 	IFQ_DEC_LEN(ifq);
