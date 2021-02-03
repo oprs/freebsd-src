@@ -758,9 +758,9 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		//printf("ED%d:%d ",i,ifq[i].ifq_len);
 	      }
 	    }
+	    // Skon - unlock
+	    IFQ_UNLOCK(&ifq[i]);
 	  }
-	  // Skon - unlock
-	  IFQ_UNLOCK(&ifq[i]);
 	  i++;
 	}
 	
