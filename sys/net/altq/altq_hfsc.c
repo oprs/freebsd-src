@@ -721,10 +721,10 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	int q_idx=0,dq_idx=0;
 	while (cl == NULL && i < MAXQ) {
 
-	  // Add locking per queue
-	  IFQ_LOCK(&ifq[i]);
-
 	  if (ALTQ_IS_ENABLED(&ifq[i])) {
+	    // Add locking per queue
+	    IFQ_LOCK(&ifq[i]);
+
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
 
 	    //IFQ_LOCK_ASSERT(ifq[i]); // Skon: Removed
