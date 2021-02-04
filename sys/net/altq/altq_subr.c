@@ -251,7 +251,7 @@ altq_enable(ifq)
 	struct ifaltq *ifq;
 {
     uint8_t i=ifq->altq_index;
-    printf("altq_enable:%d:%d:%d:%p\n",i,ifq->altq_inuse,ALTQ_IS_ENABLED(ifq),ifq);
+    printf("altq_enable:%d:%d:%p\n",i,ALTQ_IS_ENABLED(ifq),ifq);
 
 	int s;
 
@@ -568,7 +568,7 @@ altq_pfdetach(struct pf_altq *a)
 
 	// Skon - do for all queues
 	for (int i=0; i<MAXQ; i++) {
-	  if (ifp->if_snd[i].altq_inuse) {
+	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i])) {
 	    // Skon
 	    printf("altq_pfdetach: %d\n",ifp->if_snd[i].altq_index);
 	    /* if this discipline is no longer referenced, just return */

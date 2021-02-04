@@ -753,7 +753,6 @@ pf_enable_altq(struct pf_altq *altq)
 	  // skon
 
 	  printf("pf_enable_altq: %s %d\n",altq->ifname, index); 
-	  ifp->if_snd[index].altq_inuse=1;
 	  error = altq_enable(&ifp->if_snd[index]);
 
 	}

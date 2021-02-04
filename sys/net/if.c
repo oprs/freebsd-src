@@ -606,7 +606,7 @@ if_free_internal(struct ifnet *ifp)
 	IF_ADDR_LOCK_DESTROY(ifp);
 	// Skon - delete them all
 	for (int i = 0; i < MAXQ; i++) {
-		if (ifp->if_snd[i].altq_inuse)
+	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
 			ifq_delete(&ifp->if_snd[i]);
 	}
 
@@ -685,8 +685,6 @@ ifq_init(struct ifaltq *ifq, struct ifnet *ifp)
 	ifq->altq_flags &= ALTQF_CANTCHANGE;
 	ifq->altq_tbr  = NULL;
 	ifq->altq_ifp  = ifp;
-	// Skon - start not in use
-	ifq->altq_inuse = 0;
 }
 
 void
@@ -1170,9 +1168,9 @@ if_detach_internal(struct ifnet *ifp, int vmove, struct if_clone **ifcp)
 #ifdef ALTQ
 	// Skon - do for all queue
 	for (int i = 0; i < MAXQ; i++) {
-		if (ifp->if_snd[i].altq_inuse && ALTQ_IS_ENABLED(&ifp->if_snd[i]))
+		if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
 			altq_disable(&ifp->if_snd[i]);
-		if (ifp->if_snd[i].altq_inuse && ALTQ_IS_ATTACHED(&ifp->if_snd[i]))
+		if (ALTQ_IS_ATTACHED(&ifp->if_snd[i]))
 			altq_detach(&ifp->if_snd[i]);
 	}
 #endif
@@ -2448,14 +2446,14 @@ if_qflush(struct ifnet *ifp)
 	// Skon - do for all queu
 
 	for (int i = 0; i<MAXQ ; i++) {
-	  if (ifp->if_snd[i].altq_inuse)
+	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
 	    ifq = &ifp->if_snd[i];
 	  else
 	    continue;
 
 		IFQ_LOCK(ifq);
 #ifdef ALTQ
-		if (ifp->if_snd[i].altq_inuse && ALTQ_IS_ENABLED(ifq))
+		if (ALTQ_IS_ENABLED(ifq))
 			ALTQ_PURGE(ifq);
 #endif
 		n = ifq->ifq_head;
@@ -4436,7 +4434,7 @@ if_sendq_empty(if_t ifp)
 {
 	int r = 0;
 	for (int i = 0; i < MAXQ; i++)
-	if (((struct ifnet *)ifp)->if_snd[i].altq_inuse)
+	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
 		r = r && IFQ_DRV_IS_EMPTY(&((struct ifnet *)ifp)->if_snd[i]);
 
 	return r;
@@ -4469,7 +4467,7 @@ int
 if_setsendqlen(if_t ifp, int tx_desc_count)
 {
 	for (int i = 0; i < MAXQ; i++) {
-		if(((struct ifnet *)ifp)->if_snd[i].altq_inuse) {
+	  if(ALTQ_IS_ENABLED(&ifp->if_snd[i])) {
 			IFQ_SET_MAXLEN(&((struct ifnet *)ifp)->if_snd[i], tx_desc_count);
 			((struct ifnet *)ifp)->if_snd[i].ifq_drv_maxlen = tx_desc_count;
 		}

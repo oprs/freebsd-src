@@ -4193,7 +4193,7 @@ iflib_altq_if_start(if_t ifp)
 	for (int i = 0; i < MAXQ; i++) {
 	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]) &&
 	      !ALTQ_IS_BUSY(&ifq[i]) &&
-	      ifq[i].altq_inuse && ifq[i].ifq_len>0) {
+	      ifq[i].ifq_len>0) {
       	    IFQ_LOCK(&ifq[i]);
 	    ALTQ_SET_BUSY(&ifq[i]);
 	    IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
