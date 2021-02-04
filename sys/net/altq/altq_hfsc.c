@@ -720,10 +720,10 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	struct hfsc_if	*hif = (struct hfsc_if *)ifq[0].altq_disc;
 	int q_idx=0,dq_idx=0;
 	while (cl == NULL && i < MAXQ) {
+	  // Add locking per queue
+	  IFQ_LOCK(&ifq[i]);
 
 	  if (ALTQ_IS_ENABLED(&ifq[i])) {
-	    // Add locking per queue
-	    IFQ_LOCK(&ifq[i]);
 
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
 
