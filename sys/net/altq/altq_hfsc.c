@@ -721,9 +721,9 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	int q_idx=0,dq_idx=0;
 	while (cl == NULL && i < MAXQ) {
 	  // Add locking per queue
-	  IFQ_LOCK(&ifq[i]);
+	  //IFQ_LOCK(&ifq[i]);
 
-	  if (ALTQ_IS_ENABLED(&ifq[i])) {
+	  if (ALTQ_IS_INUSE(&ifq[i])) {
 
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
 
@@ -762,7 +762,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	    }
 	  }
 	  // Skon - unlock
-	  IFQ_UNLOCK(&ifq[i]);
+	  //IFQ_UNLOCK(&ifq[i]);
 	  i++;
 	}
 	

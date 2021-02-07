@@ -4102,7 +4102,7 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	/*
 	 * XXX calculate buf_ring based on flowid (divvy up bits?)
 	 */
-	//printf("%d",qidx);
+	//printf("%d ",qidx);
 	txq = &ctx->ifc_txqs[qidx];
 
 #ifdef DRIVER_BACKPRESSURE
@@ -4191,7 +4191,7 @@ iflib_altq_if_start(if_t ifp)
 
 
 	for (int i = 0; i < MAXQ; i++) {
-	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]) &&
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]) &&
 	      !ALTQ_IS_BUSY(&ifq[i]) &&
 	      ifq[i].ifq_len>0) {
       	    IFQ_LOCK(&ifq[i]);

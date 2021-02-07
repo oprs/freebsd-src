@@ -285,7 +285,7 @@ do {									\
   int maxlen=0,maxq=0;  						\
   struct ifaltq *q = ifq;						\
   for (int i = 0; i < MAXQ; i++ ) {                                     \
-     if (ALTQ_IS_ENABLED(&q[i])) {					\
+     if (ALTQ_IS_INUSE(&q[i])) {					\
          if (q[i].ifq_len > maxlen) {                                   \
 	     maxlen=q[i].ifq_len;                                       \
 	     maxq=i;                                                    \

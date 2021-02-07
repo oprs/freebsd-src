@@ -606,7 +606,7 @@ if_free_internal(struct ifnet *ifp)
 	IF_ADDR_LOCK_DESTROY(ifp);
 	// Skon - delete them all
 	for (int i = 0; i < MAXQ; i++) {
-	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
+	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]) && ALTQ_IS_INUSE(&ifp->if_snd[i]))
 			ifq_delete(&ifp->if_snd[i]);
 	}
 
@@ -685,6 +685,8 @@ ifq_init(struct ifaltq *ifq, struct ifnet *ifp)
 	ifq->altq_flags &= ALTQF_CANTCHANGE;
 	ifq->altq_tbr  = NULL;
 	ifq->altq_ifp  = ifp;
+	// Skon - start not inuse
+        ALTQ_CLEAR_INUSE(ifq);
 }
 
 void
@@ -1166,12 +1168,15 @@ if_detach_internal(struct ifnet *ifp, int vmove, struct if_clone **ifcp)
 	 * Remove routes and flush queues.
 	 */
 #ifdef ALTQ
-	// Skon - do for all queue
+	// Skon - do for all inuse queue
 	for (int i = 0; i < MAXQ; i++) {
-		if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
+		if (ALTQ_IS_ENABLED(&ifp->if_snd[i])
+		    && ALTQ_IS_INUSE(&ifp->if_snd[i]))
 			altq_disable(&ifp->if_snd[i]);
-		if (ALTQ_IS_ATTACHED(&ifp->if_snd[i]))
+		if (ALTQ_IS_ATTACHED(&ifp->if_snd[i])
+		    && ALTQ_IS_INUSE(&ifp->if_snd[i]))
 			altq_detach(&ifp->if_snd[i]);
+		ALTQ_CLEAR_INUSE(&ifp->if_snd[i]);
 	}
 #endif
 
@@ -2443,17 +2448,17 @@ if_qflush(struct ifnet *ifp)
 {
 	struct mbuf *m, *n;
 	struct ifaltq *ifq;
-	// Skon - do for all queu
+	// Skon - do for all queue
 
 	for (int i = 0; i<MAXQ ; i++) {
-	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]))
 	    ifq = &ifp->if_snd[i];
 	  else
 	    continue;
 
 		IFQ_LOCK(ifq);
 #ifdef ALTQ
-		if (ALTQ_IS_ENABLED(ifq))
+		if (ALTQ_IS_ENABLED(ifq) && ALTQ_IS_INUSE(ifq))
 			ALTQ_PURGE(ifq);
 #endif
 		n = ifq->ifq_head;
@@ -4434,7 +4439,7 @@ if_sendq_empty(if_t ifp)
 {
 	int r = 0;
 	for (int i = 0; i < MAXQ; i++)
-	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]))
 		r = r && IFQ_DRV_IS_EMPTY(&((struct ifnet *)ifp)->if_snd[i]);
 
 	return r;
@@ -4457,7 +4462,9 @@ int
 if_setsendqready(if_t ifp)
 {
 	for (int i = 0; i < MAXQ; i++) {
-		// if(((struct ifnet *)ifp)->if_snd[0].altq_inuse)
+	  printf("if_setsendqready: %d ",i);
+	  if(ALTQ_IS_INUSE(&((struct ifnet *)ifp)->if_snd[i]))
+	    printf("I");
 		IFQ_SET_READY(&((struct ifnet *)ifp)->if_snd[i]);
 	}
 	return (0);
@@ -4467,10 +4474,10 @@ int
 if_setsendqlen(if_t ifp, int tx_desc_count)
 {
 	for (int i = 0; i < MAXQ; i++) {
-	  if(ALTQ_IS_ENABLED(&ifp->if_snd[i])) {
+	  if(ALTQ_IS_INUSE(&ifp->if_snd[i])) {
 			IFQ_SET_MAXLEN(&((struct ifnet *)ifp)->if_snd[i], tx_desc_count);
 			((struct ifnet *)ifp)->if_snd[i].ifq_drv_maxlen = tx_desc_count;
-		}
+	  }
 	}
 	return (0);
 }

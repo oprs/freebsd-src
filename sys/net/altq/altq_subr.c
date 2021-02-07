@@ -198,6 +198,7 @@ altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify, 
 	ifq->altq_flags &= (ALTQF_CANTCHANGE|ALTQF_ENABLED);
 	// Skon - for use with multiple queues
 	ifq->altq_index = index;
+	ALTQ_SET_INUSE(ifq);
 	
 #ifdef ALTQ3_COMPAT
 #ifdef ALTQ_KLD
@@ -568,7 +569,7 @@ altq_pfdetach(struct pf_altq *a)
 
 	// Skon - do for all queues
 	for (int i=0; i<MAXQ; i++) {
-	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i])) {
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i])) {
 	    // Skon
 	    printf("altq_pfdetach: %d\n",ifp->if_snd[i].altq_index);
 	    /* if this discipline is no longer referenced, just return */

@@ -136,6 +136,8 @@ struct tb_regulator {
 #define	ALTQF_CNDTNING	 0x08	/* altq traffic conditioning is enabled */
 /* Skon busy bit for ALTQ */
 #define	ALTQF_BUSY	 0x10	/* altq is busy */
+/* Skon - Altq instance is inuse */
+#define	ALTQF_INUSE	 0x20	/* altq is in use */
 #define	ALTQF_DRIVER1	 0x40	/* driver specific */
 
 /* if_altqflags set internally only: */
@@ -156,8 +158,11 @@ struct tb_regulator {
 #define	ALTQ_CLEAR_BUSY(ifq)	((ifq)->altq_flags &= ~ALTQF_BUSY)
 
 #define	ALTQ_IS_ENABLED(ifq)		((ifq)->altq_flags & ALTQF_ENABLED)
+// Skon - inuse bit
+#define	ALTQ_IS_INUSE(ifq)		((ifq)->altq_flags & ALTQF_INUSE)
 #else
 #define	ALTQ_IS_ENABLED(ifq)		0
+#define	ALTQ_IS_INUSE(ifq)		0
 #endif
 #define	ALTQ_NEEDS_CLASSIFY(ifq)	((ifq)->altq_flags & ALTQF_CLASSIFY)
 #define	ALTQ_IS_CNDTNING(ifq)		((ifq)->altq_flags & ALTQF_CNDTNING)
@@ -165,6 +170,10 @@ struct tb_regulator {
 #define	ALTQ_SET_CNDTNING(ifq)		((ifq)->altq_flags |= ALTQF_CNDTNING)
 #define	ALTQ_CLEAR_CNDTNING(ifq)	((ifq)->altq_flags &= ~ALTQF_CNDTNING)
 #define	ALTQ_IS_ATTACHED(ifq)		((ifq)->altq_disc != NULL)
+// SKon - inuse bit
+#define	ALTQ_SET_INUSE(ifq)		((ifq)->altq_flags |= ALTQF_INUSE)
+#define	ALTQ_CLEAR_INUSE(ifq)	        ((ifq)->altq_flags &= ~ALTQF_INUSE)
+
 
 #define	ALTQ_ENQUEUE(ifq, m, pa, err)					\
 	(err) = (*(ifq)->altq_enqueue)((ifq),(m),(pa))
