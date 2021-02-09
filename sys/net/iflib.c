@@ -4195,7 +4195,7 @@ iflib_altq_if_start(if_t ifp)
 	int maxlen=0,maxq=0;
 	for (int i = 0; i < MAXQ; i++ ) {
 	  if (ALTQ_IS_BUSY(&ifq[i]))
-	    printf("B%d ",i);
+	    //	    printf("B%d ",i);
 	  if (ALTQ_IS_INUSE(&ifq[i]) && !ALTQ_IS_BUSY(&ifq[i])) {
 	    if (ifq[i].ifq_len > maxlen) {
              maxlen=ifq[i].ifq_len;
