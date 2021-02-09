@@ -4182,6 +4182,8 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
  * need to trigger queue drains on a scheduled basis.
  * 
  * SKON - look through array of ifaltq's, and drain them all 
+ * - New strategy - Only drain the longest in this thread, then we can do
+ * - the others in a different thread.
  */
 static void
 iflib_altq_if_start(if_t ifp)
@@ -4189,7 +4191,31 @@ iflib_altq_if_start(if_t ifp)
 	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
 
+	// Find the longest free queue
+	int maxlen=0,maxq=0;
+	for (int i = 0; i < MAXQ; i++ ) {
+	  if (ALTQ_IS_BUSY(&ifq[i]))
+	    printf("B%d ",i);
+	  if (ALTQ_IS_INUSE(&ifq[i]) && !ALTQ_IS_BUSY(&ifq[i])) {
+	    if (ifq[i].ifq_len > maxlen) {
+             maxlen=ifq[i].ifq_len;
+             maxq=i;
+	    }
+	  }
+	}
 
+	IFQ_LOCK(&ifq[maxq]);                                                    
+	ALTQ_SET_BUSY(&ifq[maxq]);                                               
+	IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);                                       
+	while (m != NULL) {                                                   
+	  iflib_if_transmit_altq(ifp, m, maxq);                                  
+              IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);
+	}                                                                     
+	IFQ_UNLOCK(&ifq[maxq]);                                                  
+	ALTQ_CLEAR_BUSY(&ifq[maxq]);
+}
+	  
+	/* Version that drains all the queues
 	for (int i = 0; i < MAXQ; i++) {
 	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]) &&
 	      !ALTQ_IS_BUSY(&ifq[i]) &&
@@ -4204,27 +4230,8 @@ iflib_altq_if_start(if_t ifp)
 	    IFQ_UNLOCK(&ifq[i]);
 	    ALTQ_CLEAR_BUSY(&ifq[i]);
 	  }
-	}
-}
-	// Version that iterates through the queues
-	/*int mbuf_aval = 1;
-	while (mbuf_aval) {
-	  mbuf_aval=0;
-	  for (int i = 0; i < MAXQ; i++) {
-	    if (ifq[i].altq_inuse && ifq[i].ifq_len>0) {
-	      //printf("Q%d:%d ",i,ifq[i].ifq_len);
-	      IFQ_LOCK(&ifq[i]);
-	      IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
-	      if (m != NULL) {
-		mbuf_aval=1;
-		//printf("T%d ",i);
-		iflib_if_transmit_altq(ifp, m, i);
-		IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
-	      }
-	      IFQ_UNLOCK(&ifq[i]);
-	    }
-	  }
-	}*/
+	  } */
+
 
 static int
 iflib_altq_if_transmit(if_t ifp, struct mbuf *m)
