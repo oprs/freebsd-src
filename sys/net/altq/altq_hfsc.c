@@ -218,7 +218,7 @@ int
 hfsc_remove_altq(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
-
+	printf("hfsc_remove_altq: %d\n",a->altq_index);
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
 	a->altq_disc = NULL;

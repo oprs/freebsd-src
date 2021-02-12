@@ -4190,7 +4190,7 @@ iflib_altq_if_start(if_t ifp)
 {
 	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
-
+	/*
 	// Find the longest free queue
 	int maxlen=0,maxq=0;
 	for (int i = 0; i < MAXQ; i++ ) {
@@ -4203,32 +4203,34 @@ iflib_altq_if_start(if_t ifp)
 	}
 
 	IFQ_LOCK(&ifq[maxq]);                                                    
-	//ALTQ_SET_BUSY(&ifq[maxq]);                                               
+	//	ALTQ_SET_BUSY(&ifq[maxq]); 
 	IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);                                       
 	while (m != NULL) {                                                   
 	  iflib_if_transmit_altq(ifp, m, maxq);                                  
               IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);
 	}                                                                     
 	IFQ_UNLOCK(&ifq[maxq]);                                                  
-	//ALTQ_CLEAR_BUSY(&ifq[maxq]);
-}
+	//	ALTQ_CLEAR_BUSY(&ifq[maxq]);
+	*/
 	  
-	/* Version that drains all the queues
+	/* Version that drains all the queues  */
 	for (int i = 0; i < MAXQ; i++) {
 	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]) &&
-	      !ALTQ_IS_BUSY(&ifq[i]) &&
+	      //	      !ALTQ_IS_BUSY(&ifq[i]) &&
 	      ifq[i].ifq_len>0) {
       	    IFQ_LOCK(&ifq[i]);
-	    ALTQ_SET_BUSY(&ifq[i]);
+	    //	    ALTQ_SET_BUSY(&ifq[i]);
 	    IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
 	    while (m != NULL) {
 	      iflib_if_transmit_altq(ifp, m, i);
 	      IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
 	    }
 	    IFQ_UNLOCK(&ifq[i]);
-	    ALTQ_CLEAR_BUSY(&ifq[i]);
+	    //ALTQ_CLEAR_BUSY(&ifq[i]);
 	  }
-	  } */
+	}
+}
+
 
 
 static int
