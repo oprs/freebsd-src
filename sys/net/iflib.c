@@ -4102,7 +4102,7 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	/*
 	 * XXX calculate buf_ring based on flowid (divvy up bits?)
 	 */
-	//printf("%d ",qidx);
+	//printf("%d",qidx);
 	txq = &ctx->ifc_txqs[qidx];
 
 #ifdef DRIVER_BACKPRESSURE

@@ -144,10 +144,10 @@ altq_lookup_indexed(char *name, uint8_t index, int type)
 {
 	struct ifnet *ifp;
 
-	if ((ifp = ifunit_indexed(name,index)) != NULL) {
+	if ((ifp = ifunit(name)) != NULL) {
 		/* read if_snd unlocked */
-		if (type != ALTQT_NONE && ifp->if_snd[0].altq_type == type)
-			return (ifp->if_snd[0].altq_disc);
+		if (type != ALTQT_NONE && ifp->if_snd[index].altq_type == type)
+			return (ifp->if_snd[index].altq_disc);
 	}
 
 	return NULL;

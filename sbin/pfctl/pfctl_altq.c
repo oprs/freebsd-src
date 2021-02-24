@@ -403,7 +403,10 @@ check_commit_altq(int dev, int opts)
 
 	/* call the discipline check for each interface. */
 	STAILQ_FOREACH(if_ppa, &interfaces, meta.link) {
-		switch (if_ppa->pa.scheduler) {
+	  printf("check_commit_altq: %s:%d", if_ppa->pa.ifname, if_ppa->meta.default_classes);
+
+
+	  switch (if_ppa->pa.scheduler) {
 		case ALTQT_CBQ:
 			error = check_commit_cbq(dev, opts, if_ppa);
 			break;
@@ -420,6 +423,7 @@ check_commit_altq(int dev, int opts)
 			break;
 		}
 	}
+			  
 	return (error);
 }
 
@@ -974,7 +978,7 @@ check_commit_hfsc(int dev, int opts, struct pfctl_altq *if_ppa)
 {
 
 	/* check if hfsc has one default queue for this interface */
-        /* Skon - reduce to leass hen or equal to 1, must still check */
+        /* Skon - reduce to less  then or equal to 1, must still check */
         /* At least one across interface queues */
 	if (if_ppa->meta.default_classes > 1) {
 		warnx("should have one default queue on %s", if_ppa->pa.ifname);

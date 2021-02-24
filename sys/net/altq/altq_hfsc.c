@@ -211,6 +211,8 @@ hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 	printf("Add hfsc_if Intf: %s, idx: %d, qn: %s hfsc addr: %p\n", a->ifname, a->altq_index, a->qname, (void *)hif);
 	// Skon - add the root index to the ifaltq
 	ifp->if_snd[a->altq_index].altq_index=a->altq_index;
+	ifp->if_snd[a->altq_index].altq_sample_time=read_machclk()/machclk_freq;
+	ifp->if_snd[a->altq_index].altq_bytes_sec=0;
 	return (0);
 }
 
@@ -302,6 +304,7 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 	size_t stats_size;
 	int error = 0;
 	// Skon - add index
+	printf("hfsc_getqstats: %s, %d\n",a->ifname,a->altq_index);
 	if ((hif = altq_lookup_indexed(a->ifname, a->altq_index, ALTQT_HFSC)) == NULL) {
 	  // if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
 	  printf("hfsc_getqstats: hif: %p\n",hif);
@@ -706,7 +709,7 @@ hfsc_nextclass(struct hfsc_class *cl)
  * hfsc_enqueue is an enqueue function to be registered to
  * (*altq_enqueue) in struct ifaltq.
  * Skon - assume ifq is actually an arrray of ifalt's to search for a matching class
- * Must lock the ight ifaltq structure here
+ * Must lock the right ifaltq structure here
  */
 static int
 hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
@@ -891,19 +894,29 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			return (m);
 		}
 	}
-	// Skon
-	//printf("E");
 
 	m = hfsc_getq(cl);
 	if (m == NULL) {
 	  printf("DROP!%d,%d\n",ifq->altq_index,hif->hif_packets);
 	  panic("hfsc_dequeue:");
 	}
+
 	len = m_pktlen(m);
 	cl->cl_hif->hif_packets--;
 	IFQ_DEC_LEN(ifq);
 	PKTCNTR_ADD(&cl->cl_stats.xmit_cnt, len);
 
+	// Skon - report per queue statistics
+	ifq->altq_packets_sec++;
+	ifq->altq_bytes_sec+=len;
+	if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
+	  printf("%s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
+		 ifq->altq_index,ifq->altq_packets_sec,ifq->altq_bytes_sec);
+	  ifq->altq_sample_time=cur_time/machclk_freq;
+	  ifq->altq_packets_sec=0;
+	  ifq->altq_bytes_sec=0;
+	}	
+	
 	update_vf(cl, len, cur_time);
 	if (realtime)
 		cl->cl_cumul += len;

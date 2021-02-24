@@ -75,6 +75,9 @@ struct	ifaltq {
 
         /* SKON: index of this queue structure */
         uint8_t altq_index;
+  u_int64_t altq_packets_sec;   /* Packets transmited in last second */
+  u_int64_t altq_sample_time;  /* Time of last sample reset */
+  u_int64_t altq_bytes_sec;  /* Time of last sample reset */
   
 };
 
