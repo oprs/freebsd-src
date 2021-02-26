@@ -165,7 +165,6 @@ pfctl_update_qstats(int dev, struct pf_altq_node **root)
 
 	mnr = pa.nr;
 	for (nr = 0; nr < mnr; ++nr) {
-	  printf("In pfctl_update_qstats: %d:%d:%s:%s:%s:%d\n",pa.altq.scheduler,pa.altq.qid,pa.altq.ifname,pa.altq.parent,pa.altq.qname,pa.altq.altq_index);
 	  
 		pa.nr = nr;
 		if (ioctl(dev, DIOCGETALTQ, &pa)) {

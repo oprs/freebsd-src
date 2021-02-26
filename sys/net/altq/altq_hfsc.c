@@ -304,14 +304,14 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 	size_t stats_size;
 	int error = 0;
 	// Skon - add index
-	printf("hfsc_getqstats: %s, %d\n",a->ifname,a->altq_index);
+	//printf("hfsc_getqstats: %s, %d\n",a->ifname,a->altq_index);
 	if ((hif = altq_lookup_indexed(a->ifname, a->altq_index, ALTQT_HFSC)) == NULL) {
 	  // if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
 	  printf("hfsc_getqstats: hif: %p\n",hif);
 		return (EBADF);
 	}
 	// Skon
-	printf("hfsc_getqstats: %s, %s, %d, %p\n",a->ifname,a->qname,a->altq_index,hif);
+	//printf("hfsc_getqstats: %s, %s, %d, %p\n",a->ifname,a->qname,a->altq_index,hif);
 	if ((cl = clh_to_clp(hif, a->qid)) == NULL)
 		return (EINVAL);
 

@@ -2623,7 +2623,7 @@ DIOCGETSTATES_full:
 			version = pq->version;
 
 		error = altq_getqstats(altq, pq->buf, &nbytes, version);
-		printf("DIOCGETQSTATS 2: %d.\n",error);
+
 		if (error == 0) {
 			pq->scheduler = altq->scheduler;
 			pq->nbytes = nbytes;
