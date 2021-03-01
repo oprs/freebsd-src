@@ -60,6 +60,9 @@ static struct hsearch_data queue_map;
 static struct hsearch_data if_map;
 static struct hsearch_data qid_map;
 
+// Skon - new function to lookup index from qname
+int  qname_to_index(struct pfctl *pf, char *qname);
+
 // Skon - add index
 static struct pfctl_altq *pfaltq_lookup(char *ifname, uint8_t index);
 //static struct pfctl_altq *pfaltq_lookup(char *ifname);
@@ -180,12 +183,12 @@ pfaltq_store(struct pf_altq *a)
 		if (hsearch_r(item, ENTER, &ret_item, &qid_map) == 0)
 			err(1, "qid map insert");
 		// Skon
-		printf("pfaltq_store: adding %s\n",item.key);
+		printf("pfaltq_store: adding queue: %s\n",item.key);
 
 	}
 }
 
-// Skon = add index
+// Skon - add index
 static struct pfctl_altq *
 pfaltq_lookup(char *ifname, uint8_t index)
 {
@@ -426,7 +429,22 @@ check_commit_altq(int dev, int opts)
 			  
 	return (error);
 }
+// Skon - qname to index. Return -1 if not found
+int qname_to_index(struct pfctl *pf, char *qname) {
+	ENTRY	 item;
+	ENTRY	*ret_item;
+	int index;
+	item.key = qname;
 
+	if (hsearch_r(item, FIND, &ret_item, &pf->queue_name_index_map) == 0) {
+	  printf("Warning - qname_to_index fails to find: %s\n",qname);
+		return (-1);
+	}
+	int *idx_ptr = ret_item->data;
+	index = (int) *idx_ptr;
+	printf("qname_to_index: %s:%d\n",qname,index);
+	return (index);
+}
 /*
  * eval_pfqueue computes the queue parameters.
  */
@@ -438,8 +456,11 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 	struct pfctl_altq	*if_ppa, *parent;
 	int		 	 error = 0;
 
-	printf("Check %s, %s, %d\n",pa->ifname,pa->qname,pa->altq_index);
+	int index= qname_to_index(pf,pa->qname);
 
+	if (index >=0) {
+	  pa->altq_index = (u_int8_t) index;
+	}
 	/* find the corresponding interface and copy fields used by queues */
 	/* Skon - add index */
 	//if ((if_ppa = pfaltq_lookup(pa->ifname)) == NULL) {
@@ -458,7 +479,7 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 	}
 	pa->qid = qname_to_qid(pa->qname);
 
-	parent = NULL;
+       parent = NULL;
 	if (pa->parent[0] != 0) {
 		// Skon - include index in lookup
 		//parent = qname_to_pfaltq(pa->parent, pa->ifname);

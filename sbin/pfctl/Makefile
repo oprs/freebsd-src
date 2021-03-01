@@ -17,7 +17,7 @@ SRCS+= pf_ruleset.c
 
 WARNS?=	2
 CFLAGS+= -Wall -Wmissing-prototypes -Wno-uninitialized
-CFLAGS+= -Wstrict-prototypes
+CFLAGS+= -Wstrict-prototypes -g3 -pipe
 CFLAGS+= -DENABLE_ALTQ -I${.CURDIR}
 
 # Need to use "WITH_" prefix to not conflict with the l/y INET/INET6 keywords

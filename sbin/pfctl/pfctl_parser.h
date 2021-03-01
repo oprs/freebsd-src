@@ -35,6 +35,7 @@
 
 #ifndef _PFCTL_PARSER_H_
 #define _PFCTL_PARSER_H_
+#include <search.h>
 
 #define PF_OSFP_FILE		"/etc/pf.os"
 
@@ -71,7 +72,12 @@
 
 struct pfr_buffer;	/* forward definition */
 
-
+// Skon - place for queue to index list
+struct queue_index_entry {
+        char queue[PF_QNAME_SIZE];
+        int  index;
+};
+#define MAX_QUEUES 20000
 struct pfctl {
 	int dev;
 	int opts;
@@ -102,6 +108,10 @@ struct pfctl {
 	u_int8_t	 debug_set;
 	u_int8_t	 hostid_set;
 	u_int8_t	 ifname_set;
+        // Skon - Map queuenames to indexes
+        struct hsearch_data queue_name_index_map;
+        struct queue_index_entry qlist[MAX_QUEUES];
+        int             qnext;
 };
 
 struct node_if {

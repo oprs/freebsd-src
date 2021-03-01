@@ -72,7 +72,10 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+// Skon
+#include <search.h>
 
+ 
 static struct pfctl	*pf = NULL;
 static int		 debug = 0;
 static int		 rulestate = 0;
@@ -2851,7 +2854,6 @@ if_item		: STRING			{
                           $$->altq_index=0;
                         } else {   // Need to fix for numbers with more then a single digit.
 			  int idx = atoi(ptr);
-			  printf("INDEX: %d\n",idx);
                           $$->altq_index=idx;;
                           if ($$->altq_index < 0 || $$->altq_index>15) {
                             yyerror("Interface number must be between 0 and 15");
@@ -5060,7 +5062,6 @@ expand_altq(struct pf_altq *a, struct node_if *interfaces,
 			    pa.scheduler == ALTQT_HFSC) {
 				/* now create a root queue */
 				memset(&pb, 0, sizeof(struct pf_altq));
-
                                 pb.altq_index=interface->altq_index; // SKON get interface index
                                 if (strlcpy(qname, "root", sizeof(qname)) >=
                                     sizeof(qname))
@@ -5096,6 +5097,38 @@ expand_altq(struct pf_altq *a, struct node_if *interfaces,
 				if (strlcpy(pb.ifname, interface->ifname,
 				    sizeof(pb.ifname)) >= sizeof(pb.ifname))
 				    errx(1, "expand_altq: strlcpy");*/
+				// Skon - Put queue name and index in map
+				ENTRY item;
+				ENTRY *ret_item;
+				if (strlcpy(pf->qlist[pf->qnext].queue,pb.qname,sizeof(pb.qname)) >=
+				    sizeof(pb.qname))
+				    errx(1, "expand_altq: strlcat queue name");
+				pf->qlist[pf->qnext].index=pb.altq_index;
+				item.key = pf->qlist[pf->qnext].queue;
+				item.data =  &pf->qlist[pf->qnext].index;
+				if (pf->qnext < MAX_QUEUES) {
+				  pf->qnext++;
+				} else {
+				  err(1, "Exceeded maximum number of queues!");
+				}
+
+				printf("root queue index map insert: %s, %d, %d\n",item.key,interface->altq_index,pf->qnext);
+				if (hsearch_r(item, ENTER, &ret_item, &pf->queue_name_index_map) == 0)
+				  err(1, "root queue index map insert");
+				/*printf("root Index Added! %s, %d\n",pb.qname,pb.altq_index);
+				ENTRY item2;
+				ENTRY *ret_item2;
+				item2.key = pb.qname;
+				if (hsearch_r(item2, FIND, &ret_item2, &pf->queue_name_index_map) == 0) {
+				  printf("Fail to find!%s\n",pb.qname);
+				} else {
+				  int *p = ret_item2->data;
+				  int d=*p;
+				  printf("Root Index Found! %s, %d\n",pb.qname,d);
+
+				  }*/
+
+
 				pb.qlimit = pa.qlimit;
 				pb.scheduler = pa.scheduler;
 				bw.bw_absolute = pa.ifbandwidth;
@@ -5120,7 +5153,48 @@ expand_altq(struct pf_altq *a, struct node_if *interfaces,
 				if (strlcpy(n->queue, queue->queue,
 				    sizeof(n->queue)) >= sizeof(n->queue))
 					errx(1, "expand_altq: strlcpy");
-				if (strlcpy(n->ifname, interface->ifname,
+				     // Get the parents Index
+				     ENTRY item;
+				     ENTRY *ret_item;
+				     item.key=n->parent;
+				     if (hsearch_r(item, FIND, &ret_item, &pf->queue_name_index_map) == 0) {
+				               printf("Fail to find!%s\n",n->queue);
+				     } else {
+				       int *p = ret_item->data;
+				       n->altq_index=*p;
+
+				     }
+				  
+				     // Skon - Put queue name and index in map
+				     if (strlcpy(pf->qlist[pf->qnext].queue,n->queue,sizeof(n->queue)) >=
+					 sizeof(n->queue))
+				       errx(1, "expand_altq: strlcat queue name");
+				     pf->qlist[pf->qnext].index=n->altq_index;
+				     item.key = pf->qlist[pf->qnext].queue;
+				     item.data =  &pf->qlist[pf->qnext].index;
+				     if (pf->qnext < MAX_QUEUES) {
+				       pf->qnext++;
+				     } else {
+				       err(1, "Exceeded maximum number of queues!");
+				     }
+
+				     if (hsearch_r(item, ENTER, &ret_item, &pf->queue_name_index_map) == 0)
+				       err(1, "next queue index map insert");
+				     /*int *p = item.data;
+				     int d=*p;
+				     printf("Next Index Added! %s, %d\n",n->queue,d);
+				     ENTRY *ret_item2;
+				     if (hsearch_r(item, FIND, &ret_item2, &pf->queue_name_index_map) == 0) {
+				       printf("Fail to find!%s\n",n->queue);
+				     } else {
+				       int *p = ret_item2->data;
+				       int d=*p;
+				       printf("Next Index Found! %s, %d\n",n->queue,d);
+				       }*/
+
+
+				     
+			        if (strlcpy(n->ifname, interface->ifname,
 				    sizeof(n->ifname)) >= sizeof(n->ifname))
 					errx(1, "expand_altq: strlcpy");
 				n->scheduler = pa.scheduler;
@@ -5219,13 +5293,56 @@ expand_queue(struct pf_altq *a, struct node_if *interfaces,
 					if (pfctl_add_altq(pf, &pa))
 						errs++;
 
+				// Get the parents Index
+				ENTRY item;
+				ENTRY *ret_item;
+				int index;
+				item.key=pa.parent;
+
+				if (hsearch_r(item, FIND, &ret_item, &pf->queue_name_index_map) == 0) {
+				  printf("Fail to find!%s\n",pa.parent);
+				  index=0;
+				} else {
+				  int *p = ret_item->data;
+				  index=*p;
+			}
+
 				for (nq = nqueues; nq != NULL; nq = nq->next) {
-					if (!strcmp(a->qname, nq->queue)) {
+				  // skon - store child queue index
+				  printf("Inner Child: %s, %d\n",nq->queue,index);
+				  if (!strcmp(a->qname, nq->queue)) {
 						yyerror("queue cannot have "
 						    "itself as child");
 						errs++;
 						continue;
-					}
+				  }
+				  // Skon - Put queue name and index in map
+				  if (strlcpy(pf->qlist[pf->qnext].queue,nq->queue,sizeof(nq->queue)) >=
+				      sizeof(nq->queue))
+				    errx(1, "expand_altq: strlcat queue name");
+				  pf->qlist[pf->qnext].index=index;
+				  item.key = pf->qlist[pf->qnext].queue;
+				  item.data =  &pf->qlist[pf->qnext].index;
+				  if (pf->qnext < MAX_QUEUES) {
+				    pf->qnext++;
+				  } else {
+				    err(1, "Exceeded maximum number of queues!");
+				  }
+
+				  if (hsearch_r(item, ENTER, &ret_item, &pf->queue_name_index_map) == 0)
+				       err(1, "inner queue index map insert");
+
+				  /*ENTRY *ret_item2;
+				  item.key=nq->queue;
+				  if (hsearch_r(item, FIND, &ret_item2, &pf->queue_name_index_map) == 0) {
+				    printf("Fail to find!%s\n",item.key);
+				  } else {
+				    int *p = ret_item2->data;
+				    int d=*p;
+				    printf("Inner Index Found! %s, %d, %p\n",nq->queue,d,&pf->queue_name_index_map);
+				    
+				    }*/
+
 					n = calloc(1,
 					    sizeof(struct node_queue));
 					if (n == NULL)

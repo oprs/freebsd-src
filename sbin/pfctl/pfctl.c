@@ -1542,6 +1542,12 @@ pfctl_rules(int dev, char *filename, int opts, int optimize,
 	pf.optimize = optimize;
 	pf.loadopt = loadopt;
 
+	// Skon - init qname to index map
+        if (hcreate_r(0, &pf.queue_name_index_map) == 0)
+                err(1, "Failed to create altq queue index map");
+	pf.qnext=0;
+	printf("pf.queue_name_index_map created \n");
+
 	/* non-brace anchor, create without resolving the path */
 	if ((pf.anchor = calloc(1, sizeof(*pf.anchor))) == NULL)
 		ERRX("pfctl_rules: calloc");
