@@ -5112,7 +5112,7 @@ expand_altq(struct pf_altq *a, struct node_if *interfaces,
 				  err(1, "Exceeded maximum number of queues!");
 				}
 
-				printf("root queue index map insert: %s, %d, %d\n",item.key,interface->altq_index,pf->qnext);
+				//printf("root queue index map insert: %s, %d, %d\n",item.key,interface->altq_index,pf->qnext);
 				if (hsearch_r(item, ENTER, &ret_item, &pf->queue_name_index_map) == 0)
 				  err(1, "root queue index map insert");
 				/*printf("root Index Added! %s, %d\n",pb.qname,pb.altq_index);
@@ -5309,7 +5309,7 @@ expand_queue(struct pf_altq *a, struct node_if *interfaces,
 
 				for (nq = nqueues; nq != NULL; nq = nq->next) {
 				  // skon - store child queue index
-				  printf("Inner Child: %s, %d\n",nq->queue,index);
+				  //printf("Inner Child: %s, %d\n",nq->queue,index);
 				  if (!strcmp(a->qname, nq->queue)) {
 						yyerror("queue cannot have "
 						    "itself as child");

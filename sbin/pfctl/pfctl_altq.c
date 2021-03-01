@@ -142,7 +142,7 @@ pfaltq_store(struct pf_altq *a)
 	ENTRY			*ret_item;
 	size_t			 key_size;
 	// skon
-	printf("pfaltq_store: %s, %s, %d\n",a->ifname,a->qname,a->altq_index);
+	//printf("pfaltq_store: %s, %s, %d\n",a->ifname,a->qname,a->altq_index);
 
 	if ((altq = malloc(sizeof(*altq))) == NULL)
 		err(1, "queue malloc");
@@ -155,14 +155,14 @@ pfaltq_store(struct pf_altq *a)
 		if ((item.key = malloc(key_size)) == NULL)
 			err(1, "if map key malloc");
 		snprintf(item.key, key_size, "%s:%d",altq->pa.ifname,altq->pa.altq_index);
-		printf("pfaltq_store if key: %s\n",item.key);
+		//printf("pfaltq_store if key: %s\n",item.key);
 
 	        //item.key = altq->pa.ifname;
 		item.data = altq;
 		if (hsearch_r(item, ENTER, &ret_item, &if_map) == 0)
 			err(1, "interface map insert");
 		STAILQ_INSERT_TAIL(&interfaces, altq, meta.link);
-		printf("pfaltq_store: adding %s\n",item.key);
+		//printf("pfaltq_store: adding %s\n",item.key);
 	} else {
 	        // Skon - Add index to ifname
 	        key_size = sizeof(a->ifname) + sizeof(a->qname)+2;
@@ -183,7 +183,7 @@ pfaltq_store(struct pf_altq *a)
 		if (hsearch_r(item, ENTER, &ret_item, &qid_map) == 0)
 			err(1, "qid map insert");
 		// Skon
-		printf("pfaltq_store: adding queue: %s\n",item.key);
+		//printf("pfaltq_store: adding queue: %s\n",item.key);
 
 	}
 }
@@ -199,11 +199,14 @@ pfaltq_lookup(char *ifname, uint8_t index)
 	if ((item.key = malloc(key_size)) == NULL)
 		err(1, "if map key malloc");
 	snprintf(item.key, key_size, "%s:%d",ifname,index);
-	printf("pfaltq_lookup: %s\n",item.key);
+	//printf("pfaltq_lookup: %s ",item.key);
 	//item.key = ifname;
-	if (hsearch_r(item, FIND, &ret_item, &if_map) == 0)
+	if (hsearch_r(item, FIND, &ret_item, &if_map) == 0) {
+	  //printf("... Fail\n");
 		return (NULL);
-
+	}
+	//printf("... Succeed\n");
+	
 	return (ret_item->data);
 }
 
@@ -219,7 +222,7 @@ qname_to_pfaltq(const char *qname, const char *ifname, uint8_t index)
 	// Skon add index
 	//snprintf(item.key, sizeof(key), "%s:%s", ifname, qname);
 	snprintf(item.key, sizeof(key), "%s:%d:%s", ifname, index, qname);
-	printf("qname_to_pfaltq: %s\n",item.key);
+	//printf("qname_to_pfaltq: %s\n",item.key);
 	if (hsearch_r(item, FIND, &ret_item, &queue_map) == 0)
 		return (NULL);
 
@@ -259,7 +262,7 @@ print_altq(const struct pf_altq *a, unsigned int level,
 		printf("INACTIVE ");
 #endif
 	// Skon
-	printf("altq on %s ", a->ifname);
+	//printf("altq on %s ", a->ifname);
 
 	switch (a->scheduler) {
 	case ALTQT_CBQ:
@@ -406,7 +409,7 @@ check_commit_altq(int dev, int opts)
 
 	/* call the discipline check for each interface. */
 	STAILQ_FOREACH(if_ppa, &interfaces, meta.link) {
-	  printf("check_commit_altq: %s:%d", if_ppa->pa.ifname, if_ppa->meta.default_classes);
+	  //printf("check_commit_altq: %s:%d", if_ppa->pa.ifname, if_ppa->meta.default_classes);
 
 
 	  switch (if_ppa->pa.scheduler) {
@@ -442,7 +445,7 @@ int qname_to_index(struct pfctl *pf, char *qname) {
 	}
 	int *idx_ptr = ret_item->data;
 	index = (int) *idx_ptr;
-	printf("qname_to_index: %s:%d\n",qname,index);
+	//printf("qname_to_index: %s: Index:%d\n",qname,index);
 	return (index);
 }
 /*

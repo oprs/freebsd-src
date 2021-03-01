@@ -1478,7 +1478,7 @@ int
 pfctl_add_altq(struct pfctl *pf, struct pf_altq *a)
 {
   // Skon - pass index local_flags
-  printf("pfctl_add_altq: %s %s %d\n", a->ifname, a->qname, a->altq_index);
+  //printf("pfctl_add_altq: %s %s %d\n", a->ifname, a->qname, a->altq_index);
   a->local_flags=a->altq_index;
 	if (altqsupport &&
 	    (loadopt & PFCTL_FLAG_ALTQ) != 0) {
@@ -1546,7 +1546,7 @@ pfctl_rules(int dev, char *filename, int opts, int optimize,
         if (hcreate_r(0, &pf.queue_name_index_map) == 0)
                 err(1, "Failed to create altq queue index map");
 	pf.qnext=0;
-	printf("pf.queue_name_index_map created \n");
+	//printf("pf.queue_name_index_map created \n");
 
 	/* non-brace anchor, create without resolving the path */
 	if ((pf.anchor = calloc(1, sizeof(*pf.anchor))) == NULL)
