@@ -752,7 +752,7 @@ pf_enable_altq(struct pf_altq *altq)
 	if (ifp->if_snd[index].altq_type != ALTQT_NONE) {
 	  // skon
 
-	  printf("pf_enable_altq: %s %d\n",altq->ifname, index); 
+	  //printf("pf_enable_altq: %s %d\n",altq->ifname, index); 
 	  error = altq_enable(&ifp->if_snd[index]);
 
 	}
@@ -2488,7 +2488,7 @@ DIOCGETSTATES_full:
 
 		if (error)
 			break;
-		printf("DIOCADDALTQV1: %d\n",altq->altq_index);
+		//printf("DIOCADDALTQV1: %d\n",altq->altq_index);
 		altq->local_flags = 0;
 
 		PF_RULES_WLOCK();
@@ -2515,11 +2515,11 @@ DIOCGETSTATES_full:
 				//if (strncmp(a->ifname, altq->ifname,
 				//  IFNAMSIZ) == 0) {
 				// Skon: change to look at BOTH interface and index
-				printf("pf_ioctl.c: DIOCADDALTQV1 %s %d %s, %p\n",a->ifname,a->altq_index,a->qname,a->altq_disc);
+				//printf("pf_ioctl.c: DIOCADDALTQV1 %s %d %s, %p\n",a->ifname,a->altq_index,a->qname,a->altq_disc);
 				if (strncmp(a->ifname, altq->ifname, IFNAMSIZ) == 0 &&
 				    a->altq_index == altq->altq_index) {
 					altq->altq_disc = a->altq_disc;
-					printf("Found Interface: %p, %s, %d\n",altq->altq_disc,altq->qname,altq->altq_index);
+					//printf("Found Interface: %p, %s, %d\n",altq->altq_disc,altq->qname,altq->altq_index);
 					break;
 				}
 			}

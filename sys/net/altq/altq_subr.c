@@ -171,7 +171,7 @@ altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify, 
 		return ENXIO;
 	}
 	// Skon
-	printf("altq_attach: %d, %d, %p\n",type,index,ifq);
+	//printf("altq_attach: %d, %d, %p\n",type,index,ifq);
 #ifdef ALTQ3_COMPAT
 	/*
 	 * pfaltq can override the existing discipline, but altq3 cannot.
@@ -251,8 +251,8 @@ int
 altq_enable(ifq)
 	struct ifaltq *ifq;
 {
-    uint8_t i=ifq->altq_index;
-    printf("altq_enable:%d:%d:%p\n",i,ALTQ_IS_ENABLED(ifq),ifq);
+  //uint8_t i=ifq->altq_index;
+    //printf("altq_enable:%d:%d:%p\n",i,ALTQ_IS_ENABLED(ifq),ifq);
 
 	int s;
 
@@ -390,7 +390,7 @@ tbr_set(ifq, profile)
 	struct tb_regulator *tbr, *otbr;
 
 	// Skon
-	printf("tbr_set: %d\n",ifq->altq_index);
+	//printf("tbr_set: %d\n",ifq->altq_index);
 	if (tbr_dequeue_ptr == NULL)
 		tbr_dequeue_ptr = tbr_dequeue;
 
@@ -571,7 +571,7 @@ altq_pfdetach(struct pf_altq *a)
 	for (int i=0; i<MAXQ; i++) {
 	  if (ALTQ_IS_INUSE(&ifp->if_snd[i])) {
 	    // Skon
-	    printf("altq_pfdetach: %d\n",ifp->if_snd[i].altq_index);
+	    //printf("altq_pfdetach: %d\n",ifp->if_snd[i].altq_index);
 	    /* if this discipline is no longer referenced, just return */
 	    /* read unlocked from if_snd */
 	    if (a->altq_disc == NULL || a->altq_disc != ifp->if_snd[i].altq_disc)

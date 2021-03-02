@@ -173,7 +173,7 @@ hfsc_pfattach(struct pf_altq *a)
 	struct ifnet *ifp;
 	int s, error;
 
-	printf("hfsc_pfattach: index: %d\n",a->altq_index);
+	//printf("hfsc_pfattach: index: %d\n",a->altq_index);
 	if ((ifp = ifunit(a->ifname)) == NULL || a->altq_disc == NULL)
 		return (EINVAL);
 	s = splnet();
@@ -208,7 +208,7 @@ hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 	/* keep the state in pf_altq */
 	a->altq_disc = hif;
 	// Skon
-	printf("Add hfsc_if Intf: %s, idx: %d, qn: %s hfsc addr: %p\n", a->ifname, a->altq_index, a->qname, (void *)hif);
+	//printf("Add hfsc_if Intf: %s, idx: %d, qn: %s hfsc addr: %p\n", a->ifname, a->altq_index, a->qname, (void *)hif);
 	// Skon - add the root index to the ifaltq
 	ifp->if_snd[a->altq_index].altq_index=a->altq_index;
 	ifp->if_snd[a->altq_index].altq_sample_time=read_machclk()/machclk_freq;
@@ -273,7 +273,7 @@ hfsc_add_queue(struct pf_altq *a)
 	if (cl == NULL)
 		return (ENOMEM);
 	// Skon
-	printf("hfsc_add_queue: %s %d %s %s a: %p p: %p hif:%p\n",a->ifname,a->altq_index,a->qname,a->parent,cl,parent,hif);
+	//printf("hfsc_add_queue: %s %d %s %s a: %p p: %p hif:%p\n",a->ifname,a->altq_index,a->qname,a->parent,cl,parent,hif);
 	return (0);
 }
 
@@ -282,6 +282,7 @@ hfsc_remove_queue(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
 	struct hfsc_class *cl;
+	printf("hfsc_remove_altq: %d\n",a->altq_index);
 
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
@@ -307,7 +308,7 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 	//printf("hfsc_getqstats: %s, %d\n",a->ifname,a->altq_index);
 	if ((hif = altq_lookup_indexed(a->ifname, a->altq_index, ALTQT_HFSC)) == NULL) {
 	  // if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
-	  printf("hfsc_getqstats: hif: %p\n",hif);
+	  //printf("hfsc_getqstats: hif: %p\n",hif);
 		return (EBADF);
 	}
 	// Skon
@@ -539,7 +540,7 @@ hfsc_class_create(struct hfsc_if *hif, struct service_curve *rsc,
 	if (hif->hif_class_tbl[i] == NULL) {
 		hif->hif_class_tbl[i] = cl;
 		// SKon
-		printf("hfsc_class_create: id: %d handle: %d index: %d hfsc addr:%p cl add:%p parent: %p\n",cl->cl_id,cl->cl_handle,i,cl->cl_hif, cl, parent);
+		//printf("hfsc_class_create: id: %d handle: %d index: %d hfsc addr:%p cl add:%p parent: %p\n",cl->cl_id,cl->cl_handle,i,cl->cl_hif, cl, parent);
 
 	}
 	else {
@@ -724,7 +725,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	int q_idx=0,dq_idx=0;
 	while (cl == NULL && i < MAXQ) {
 	  // Add locking per queue
-	  //IFQ_LOCK(&ifq[i]);
+	  IFQ_LOCK(&ifq[i]);
 
 	  if (ALTQ_IS_INUSE(&ifq[i])) {
 
@@ -765,7 +766,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	    }
 	  }
 	  // Skon - unlock
-	  //IFQ_UNLOCK(&ifq[i]);
+	  IFQ_UNLOCK(&ifq[i]);
 	  i++;
 	}
 	
@@ -2125,7 +2126,7 @@ hfscioctl(dev, cmd, addr, flag, p)
 
 	case HFSC_IF_ATTACH:
 	  //skon
-	  printf("HFSC_IF_ATTACH, altq_hfsc.c/n")
+	  //printf("HFSC_IF_ATTACH, altq_hfsc.c/n")
 		error = hfsccmd_if_attach((struct hfsc_attach *)addr);
 		break;
 
@@ -2154,7 +2155,7 @@ hfscioctl(dev, cmd, addr, flag, p)
 				break;
 			}
 			// Skon
-			printf("HFSC_ENABLE: %d\n",hif->hif_ifq->altq_index);
+			//printf("HFSC_ENABLE: %d\n",hif->hif_ifq->altq_index);
 			error = altq_enable(hif->hif_ifq);
 			break;
 
@@ -2207,7 +2208,7 @@ hfsccmd_if_attach(ap)
 	struct ifnet *ifp;
 	int error;
 	//Skon
-	printf("hfsccmd_if_attach: \n");
+	//printf("hfsccmd_if_attach: \n");
 	if ((ifp = ifunit(ap->iface.hfsc_ifname)) == NULL)
 		return (ENXIO);
 
