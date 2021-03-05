@@ -4190,6 +4190,22 @@ iflib_altq_if_start(if_t ifp)
 {
 	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
+	// Find the first queue with data
+	for (int i = 0; i < MAXQ; i++ ) {
+	  if (ALTQ_IS_INUSE(&ifq[i]) && !ALTQ_IS_BUSY(&ifq[i])) {
+	    if (ifq[i].ifq_len > 0) {
+	      ALTQ_SET_BUSY(&ifq[maxq]); 
+	      IFQ_LOCK(&ifq[maxq]);                                                    
+	      IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);                                       
+	      while (m != NULL) {                                                   
+		iflib_if_transmit_altq(ifp, m, maxq);                                  
+		IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);
+	      }                                                                     
+	      IFQ_UNLOCK(&ifq[maxq]);                                                  
+	      ALTQ_CLEAR_BUSY(&ifq[maxq]);
+	    }
+	  }
+	}
 	/*
 	// Find the longest free queue
 	int maxlen=0,maxq=0;
@@ -4213,7 +4229,7 @@ iflib_altq_if_start(if_t ifp)
 	//	ALTQ_CLEAR_BUSY(&ifq[maxq]);
 	*/
 	  
-	/* Version that drains all the queues  */
+	/* Version that drains all the queues  
 	for (int i = 0; i < MAXQ; i++) {
 	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]) &&
 	      //	      !ALTQ_IS_BUSY(&ifq[i]) &&
@@ -4228,7 +4244,7 @@ iflib_altq_if_start(if_t ifp)
 	    IFQ_UNLOCK(&ifq[i]);
 	    //ALTQ_CLEAR_BUSY(&ifq[i]);
 	  }
-	}
+	  }*/
 }
 
 
