@@ -4194,15 +4194,15 @@ iflib_altq_if_start(if_t ifp)
 	for (int i = 0; i < MAXQ; i++ ) {
 	  if (ALTQ_IS_INUSE(&ifq[i]) && !ALTQ_IS_BUSY(&ifq[i])) {
 	    if (ifq[i].ifq_len > 0) {
-	      ALTQ_SET_BUSY(&ifq[maxq]); 
-	      IFQ_LOCK(&ifq[maxq]);                                                    
-	      IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);                                       
+	      IFQ_LOCK(&ifq[i]);                                                    
+	      ALTQ_SET_BUSY(&ifq[i]); 
+	      IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                       
 	      while (m != NULL) {                                                   
-		iflib_if_transmit_altq(ifp, m, maxq);                                  
-		IFQ_DEQUEUE_NOLOCK(&ifq[maxq], m);
+		iflib_if_transmit_altq(ifp, m, i);                                  
+		IFQ_DEQUEUE_NOLOCK(&ifq[i], m);
 	      }                                                                     
-	      IFQ_UNLOCK(&ifq[maxq]);                                                  
-	      ALTQ_CLEAR_BUSY(&ifq[maxq]);
+	      ALTQ_CLEAR_BUSY(&ifq[i]);
+	      IFQ_UNLOCK(&ifq[i]);
 	    }
 	  }
 	}
