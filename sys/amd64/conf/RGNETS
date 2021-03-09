@@ -1,0 +1,89 @@
+# FreeBSD GENERIC plus RGNETS additions
+
+# always start with the latest GENERIC configuration
+include GENERIC
+
+# begin the custom RGNETS kernel
+ident RGNETS
+
+# mimic the GENERIC-NODEBUG kernel and make sure none of the debug options in
+# CURRENT's GENERIC are on.
+nooptions       INVARIANTS
+nooptions       INVARIANT_SUPPORT
+nooptions       WITNESS
+nooptions       WITNESS_SKIPSPIN
+nooptions       BUF_TRACKING
+nooptions       DEADLKRES
+nooptions       FULL_BUF_TRACKING
+#
+# 12.2 is now RELEASE, so the above is not necessary
+
+# build only necessary modules we may include in rXg rc.conf
+# cc_htcp_load="YES"
+# cc_cubic_load="YES"
+#
+# fdescfs, nullfs and tmpfs are required by poudriere to build ports
+#
+# i2c/smbus i2c/controllers/intpm loaded by proxmox/KVM
+
+makeoptions MODULES_OVERRIDE="		\
+	cc/cc_cubic cc/cc_htcp		\
+	i2c/smbus i2c/controllers/intpm \
+	fdescfs nullfs tmpfs"
+
+# Netflix RACK TCP stack
+# makeoptions WITH_EXTRA_TCP_STACKS=1
+# options TCPHPTS
+#
+# tcp_rack_load="YES"
+# makeoptions MODULES_OVERRIDE+="tcp_rack"
+#
+# Abandon the attempt at using RACK in 12.x, because the TCPHTPS
+# option causes booting proxmox/KVM to hang.
+
+# hardware crypto access drivers
+device cryptodev
+device aesni
+
+# device driver for AMD processor on-die digital thermal sensor
+device amdtemp
+
+# device driver for Intel Core on-die digital thermal sensor
+device coretemp
+
+# interface to the system CPU
+device cpuctl
+
+# OpenIPMI compatible IPMI interface
+device ipmi
+
+# USB generic HID support
+device uhid
+
+# PF
+device		pf
+device		pflog
+# ALTQ + HFSC
+options		ALTQ
+options		ALTQ_HFSC       # Hierarchical Packet Scheduler (HFSC)
+
+# Interfaces not static in GENERIC
+device		bnxt
+device		if_bridge
+
+# PPPoE
+options		NETGRAPH
+options		NETGRAPH_ETHER
+options		NETGRAPH_PPPOE
+options		NETGRAPH_SOCKET
+
+# IPsec
+device		enc
+
+# ZFS
+options     ZFS
+
+# Automounter filesystem and FUSE (sysutils/fusefs-ntfs) support
+options     AUTOFS
+options     FUSEFS
+
