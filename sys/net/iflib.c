@@ -4075,7 +4075,6 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	 */
 	txq = &ctx->ifc_txqs[qidx];
 	// Skon - report non altq queue usage
-	printf("NQ ");
 	//iflib_queue_count(txq, m,ifp->if_xname,qidx,0);
 
 #ifdef DRIVER_BACKPRESSURE
