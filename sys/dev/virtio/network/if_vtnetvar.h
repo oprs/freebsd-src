@@ -31,6 +31,8 @@
 #ifndef _IF_VTNETVAR_H
 #define _IF_VTNETVAR_H
 
+#define VTNET_LEGACY_TX
+
 struct vtnet_softc;
 
 struct vtnet_statistics {
