@@ -8,6 +8,7 @@ BINDIR=		${TESTSDIR}
 ATF_TESTS_SH+=	if_lagg_test
 ATF_TESTS_SH+=	if_clone_test
 ATF_TESTS_SH+=	if_tun_test
+ATF_TESTS_SH+=	if_vlan
 ATF_TESTS_C+=	if_epair
 
 # The tests are written to be run in parallel, but doing so leads to random
