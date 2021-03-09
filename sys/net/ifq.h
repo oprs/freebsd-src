@@ -256,6 +256,13 @@ do {									\
 #define	IFQ_SET_MAXLEN(ifq, len)	((ifq)->ifq_maxlen = (len))
 
 /*
+ * Skon: Added TRYLOCK to test for lock in use during queue rule match on hfsc_enqueue
+ * This avoids contention during operation, but allow for protection while the 
+ * queue is being detroyed
+ */
+#define IFQ_TRYLOCK(ifq)            mtx_trylock(&(ifq)->ifq_mtx)
+
+/*
  * The IFF_DRV_OACTIVE test should really occur in the device driver, not in
  * the handoff logic, as that flag is locked by the device driver.
  */

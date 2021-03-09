@@ -131,6 +131,18 @@ __FBSDID("$FreeBSD$");
  */
 MALLOC_DEFINE(M_IFLIB, "iflib", "ifnet library");
 
+/*
+ * machine dependent clock - Added by Skon
+ * a 64bit high resolution time counter.
+ */
+extern int machclk_usepcc;
+extern u_int32_t machclk_freq;
+extern u_int32_t machclk_per_tick;
+extern void init_machclk(void);
+extern u_int64_t read_machclk(void);
+
+
+
 #define	IFLIB_RXEOF_MORE (1U << 0)
 #define	IFLIB_RXEOF_EMPTY (2U << 0)
 
@@ -362,6 +374,14 @@ struct iflib_txq {
 	bus_dma_segment_t	ift_segs[IFLIB_MAX_TX_SEGS]  __aligned(CACHE_LINE_SIZE);
 #ifdef IFLIB_DIAGNOSTICS
 	uint64_t ift_cpu_exec_count[256];
+#endif
+  // Skon - stuff for queue use stats
+#define MULTIQ_TEST
+#ifdef MULTIQ_TEST
+        uint64_t altq_packets;
+        uint64_t altq_sample_time;
+        uint64_t non_altq_packets;
+        uint64_t non_altq_sample_time;
 #endif
 } __aligned(CACHE_LINE_SIZE);
 
@@ -703,6 +723,7 @@ static int iflib_legacy_setup(if_ctx_t ctx, driver_filter_t filter, void *filter
 static void iflib_txq_check_drain(iflib_txq_t txq, int budget);
 static uint32_t iflib_txq_can_drain(struct ifmp_ring *);
 #ifdef ALTQ
+static void iflib_altq_if_start2(if_t ifp,int i);
 static void iflib_altq_if_start(if_t ifp);
 static int iflib_altq_if_transmit(if_t ifp, struct mbuf *m);
 #endif
@@ -3817,7 +3838,7 @@ _task_fn_tx(void *context)
 #endif
 #ifdef ALTQ
 	if (ALTQ_IS_ENABLED(&ifp->if_snd[0]))
-		iflib_altq_if_start(ifp);
+	  iflib_altq_if_start2(ifp,-1);
 #endif
 	if (txq->ift_db_pending)
 		ifmp_ring_enqueue(txq->ift_br, (void **)&txq, 1, TX_BATCH_SIZE, abdicate);
@@ -3995,6 +4016,40 @@ iflib_if_init(void *arg)
 	CTX_UNLOCK(ctx);
 }
 
+// Skon - function to test queue usage
+static void
+iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int altq) {
+  u_int64_t cur_time = read_machclk();
+  // Skon - report per queue statistics
+  if (!txq) {
+    printf("iflib_queue_count: null txq pointer\n");
+    return;
+  }
+  if (!m) {
+    printf("iflib_queue_count: null mbuf\n");
+    return;
+  }
+  if (!ifname) {
+    printf("iflib_queue_count: null name\n");
+    return;
+  }
+  if (altq) {
+    txq->altq_packets++;
+    if (txq->altq_sample_time+10<cur_time/machclk_freq) {
+      printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
+      txq->altq_sample_time=cur_time/machclk_freq;
+      txq->altq_packets=0;
+    }
+  } else {
+    txq->non_altq_packets++;
+    if (txq->non_altq_sample_time+10<cur_time/machclk_freq) {
+      printf("REG: %s Q%d %lu Pkts\n",ifname,index,txq->non_altq_packets);
+      txq->non_altq_sample_time=cur_time/machclk_freq;
+      txq->non_altq_packets=0;
+    }
+  }
+}
+
 static int
 iflib_if_transmit(if_t ifp, struct mbuf *m)
 {
@@ -4019,6 +4074,9 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	 * XXX calculate buf_ring based on flowid (divvy up bits?)
 	 */
 	txq = &ctx->ifc_txqs[qidx];
+	// Skon - report non altq queue usage
+	printf("NQ ");
+	//iflib_queue_count(txq, m,ifp->if_xname,qidx,0);
 
 #ifdef DRIVER_BACKPRESSURE
 	if (txq->ift_closed) {
@@ -4104,7 +4162,7 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	 */
 	//printf("%d",qidx);
 	txq = &ctx->ifc_txqs[qidx];
-
+	iflib_queue_count(txq, m,ifp->if_xname,qidx,1);
 #ifdef DRIVER_BACKPRESSURE
 	if (txq->ift_closed) {
 		while (m != NULL) {
@@ -4186,11 +4244,25 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
  * - the others in a different thread.
  */
 static void
-iflib_altq_if_start(if_t ifp)
+iflib_altq_if_start2(if_t ifp, int i)
 {
 	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
+	/* Skon: Use the right queue if index >= 0 */
+	if (i>=0) {
+	if (ifq[i].ifq_len > 0) {
+	  IFQ_LOCK(&ifq[i]);                                                                                         
+	  IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                                                            
+	  while (m != NULL) {                                                                                        
+	    iflib_if_transmit_altq(ifp, m, i);                                                                       
+	    IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                                                          
+	  }                                                                                                          
+	  IFQ_UNLOCK(&ifq[i]);                                                                                       
+	}
+	} else {
+	
 	// Find the first queue with data
+      
 	for (int i = 0; i < MAXQ; i++ ) {
 	  if (ALTQ_IS_INUSE(&ifq[i]) && !ALTQ_IS_BUSY(&ifq[i])) {
 	    if (ifq[i].ifq_len > 0) {
@@ -4203,9 +4275,11 @@ iflib_altq_if_start(if_t ifp)
 	      }                                                                     
 	      ALTQ_CLEAR_BUSY(&ifq[i]);
 	      IFQ_UNLOCK(&ifq[i]);
+
 	    }
 	  }
 	}
+        }
 	/*
 	// Find the longest free queue
 	int maxlen=0,maxq=0;
@@ -4247,18 +4321,27 @@ iflib_altq_if_start(if_t ifp)
 	  }*/
 }
 
-
+static void
+iflib_altq_if_start(if_t ifp)
+{
+  iflib_altq_if_start2(ifp,-1);
+}
 
 static int
 iflib_altq_if_transmit(if_t ifp, struct mbuf *m)
 {
 	int err;
+	int queue_index;
 	// Skon - we will assume the first ALTQ is always enabled if any are
 	// Pass all the ifaltq's for this interface to the enqueue routine
 	if (ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
 		IFQ_ENQUEUE(&ifp->if_snd[0], m, err);
+		if (err < 0) {
+		  queue_index = -err;
+		  err=0;
+		}
 		if (err == 0)
-			iflib_altq_if_start(ifp);
+		  iflib_altq_if_start2(ifp,queue_index);
 	} else
 		err = iflib_if_transmit(ifp, m);
 

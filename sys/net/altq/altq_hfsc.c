@@ -615,7 +615,6 @@ hfsc_class_destroy(struct hfsc_class *cl)
 
 	if (is_a_parent_class(cl))
 		return (EBUSY);
-
 	s = splnet();
 	IFQ_LOCK(cl->cl_hif->hif_ifq);
 
@@ -646,6 +645,7 @@ hfsc_class_destroy(struct hfsc_class *cl)
 	cl->cl_hif->hif_class_tbl[cl->cl_slot] = NULL;
 	cl->cl_hif->hif_classes--;
 	IFQ_UNLOCK(cl->cl_hif->hif_ifq);
+
 	splx(s);
 
 	if (cl->cl_red != NULL) {
@@ -718,20 +718,21 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	//struct hfsc_if	*hif = (struct hfsc_if *)ifq->altq_disc;
   struct hfsc_class *cl=NULL, *cl_d=NULL;
 	struct pf_mtag *t;
-	int len;
+	//int lock_held=0;
+	int len=0;
 	int i=0;
 	// Skon - Loop through ifaltq's, trying to find the best place to send the packet.
 	struct hfsc_if	*hif = (struct hfsc_if *)ifq[0].altq_disc;
 	int q_idx=0,dq_idx=0;
-	while (cl == NULL && i < MAXQ) {
+	while (cl == NULL && i<MAXQ) {
 	  // Add locking per queue
-	  IFQ_LOCK(&ifq[i]);
-
-	  if (ALTQ_IS_INUSE(&ifq[i])) {
+	  if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i])) {
+	    //lock_held=IFQ_TRYLOCK(&ifq[i]);
+	    IFQ_LOCK(&ifq[i]);
 
 	    hif = (struct hfsc_if *)ifq[i].altq_disc;
 
-	    //IFQ_LOCK_ASSERT(ifq[i]); // Skon: Removed
+	    //IFQ_LOCK_ASSERT(&ifq[i]); // Skon: Removed
 	    
 	    /* grab class set by classifier */
 	    if ((m->m_flags & M_PKTHDR) == 0) {
@@ -764,10 +765,11 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		//printf("ED%d:%d ",i,ifq[i].ifq_len);
 	      }
 	    }
-	  }
-	  // Skon - unlock
+	  // Skon - unlock 
 	  IFQ_UNLOCK(&ifq[i]);
-	  i++;
+	  }
+	  //if (lock_held)
+	i++;
 	}
 	
 	if (cl==NULL && cl_d!=NULL) {
@@ -807,8 +809,8 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		set_active(cl, m_pktlen(m));
 	// Skon - add locking per queue
 	IFQ_UNLOCK(&ifq[q_idx]);
-
-	return (0);
+	// Skon: return the negative of the queue number
+	return (-q_idx);
 }
 
 /*
@@ -892,7 +894,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			hif->hif_pollcache = cl;
 			m = hfsc_pollq(cl);
 			// Skon - report per queue statistics
-			len = m_pktlen(m);
+			/*len = m_pktlen(m);
 			ifq->altq_packets_sec++;
 			ifq->altq_bytes_sec+=len;
 			if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
@@ -901,9 +903,8 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			  ifq->altq_sample_time=cur_time/machclk_freq;
 			  ifq->altq_packets_sec=0;
 			  ifq->altq_bytes_sec=0;
-			}	
+			  }*/	
 	
-			//printf("P");
 			return (m);
 		}
 	}
@@ -920,7 +921,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	PKTCNTR_ADD(&cl->cl_stats.xmit_cnt, len);
 
 	// Skon - report per queue statistics
-	ifq->altq_packets_sec++;
+	/*ifq->altq_packets_sec++;
 	ifq->altq_bytes_sec+=len;
 	if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
 	  printf("%s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
@@ -928,7 +929,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	  ifq->altq_sample_time=cur_time/machclk_freq;
 	  ifq->altq_packets_sec=0;
 	  ifq->altq_bytes_sec=0;
-	}	
+	  }*/	
 	
 	update_vf(cl, len, cur_time);
 	if (realtime)
