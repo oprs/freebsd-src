@@ -420,6 +420,7 @@ struct mbuf;
 struct route;
 struct sockaddr;
 struct bpf_if;
+struct ether_8021q_tag;
 
 extern	uint32_t ether_crc32_le(const uint8_t *, size_t);
 extern	uint32_t ether_crc32_be(const uint8_t *, size_t);
@@ -433,10 +434,17 @@ extern	int  ether_output_frame(struct ifnet *, struct mbuf *);
 extern	char *ether_sprintf(const u_int8_t *);
 void	ether_vlan_mtap(struct bpf_if *, struct mbuf *,
 	    void *, u_int);
-struct mbuf  *ether_vlanencap(struct mbuf *, uint16_t);
-bool	ether_8021q_frame(struct mbuf **mp, struct ifnet *ife, struct ifnet *p,
-	    uint16_t vid, uint8_t pcp);
+struct mbuf *ether_vlanencap_proto(struct mbuf *, uint16_t, uint16_t);
+bool ether_8021q_frame(struct mbuf **mp, struct ifnet *ife,
+	struct ifnet *p, struct ether_8021q_tag *);
 void	ether_gen_addr(struct ifnet *ifp, struct ether_addr *hwaddr);
+
+static __inline struct mbuf *ether_vlanencap(struct mbuf *m, uint16_t tag)
+{
+
+	return ether_vlanencap_proto(m, tag, ETHERTYPE_VLAN);
+}
+
 
 #ifdef _SYS_EVENTHANDLER_H_
 /* new ethernet interface attached event */
