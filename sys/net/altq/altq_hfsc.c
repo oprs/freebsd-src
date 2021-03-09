@@ -190,12 +190,12 @@ hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 	int i;
 
 	if (ifp == NULL) {
-	  printf("EINVAL\n");
+	  //printf("EINVAL\n");
 	  return (EINVAL);
 	}
 
 	  if (!ALTQ_IS_READY(&ifp->if_snd[a->altq_index])) {
-	    printf("ENODEV\n");
+	    //printf("ENODEV\n");
 	    return (ENODEV);
 	  }
 
@@ -226,7 +226,7 @@ int
 hfsc_remove_altq(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
-	printf("hfsc_remove_altq: %d\n",a->altq_index);
+	//printf("hfsc_remove_altq: %d\n",a->altq_index);
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
 	a->altq_disc = NULL;
@@ -288,7 +288,7 @@ hfsc_remove_queue(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
 	struct hfsc_class *cl;
-	printf("hfsc_remove_altq: %d\n",a->altq_index);
+	//printf("hfsc_remove_altq: %d\n",a->altq_index);
 
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
@@ -885,8 +885,10 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			ifq->altq_packets_sec++;
 			ifq->altq_bytes_sec+=len;
 			if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
+			/*
 			  printf("-%s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
 				 ifq->altq_index,ifq->altq_packets_sec,ifq->altq_bytes_sec);
+			*/
 			  ifq->altq_sample_time=cur_time/machclk_freq;
 			  ifq->altq_packets_sec=0;
 			  ifq->altq_bytes_sec=0;
@@ -898,7 +900,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 
 	m = hfsc_getq(cl);
 	if (m == NULL) {
-	  printf("DROP!%d,%d\n",ifq->altq_index,hif->hif_packets);
+	  //printf("DROP!%d,%d\n",ifq->altq_index,hif->hif_packets);
 	  panic("hfsc_dequeue:");
 	}
 
