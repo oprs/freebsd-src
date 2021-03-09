@@ -2513,10 +2513,10 @@ struct ifnet *
 ifunit_indexed(const char *name, const uint8_t index)
 {
 	struct ifnet *ifp;
-	printf("ifunit_indexed: %s, %d\n",name,index);
+	//printf("ifunit_indexed: %s, %d\n",name,index);
 	IFNET_RLOCK_NOSLEEP();
 	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link) {
-		printf("ifunit_indexed: %s, %d\n",ifp->if_xname, ifp->if_snd[0].altq_index);
+		//printf("ifunit_indexed: %s, %d\n",ifp->if_xname, ifp->if_snd[0].altq_index);
 		if (strncmp(name, ifp->if_xname, IFNAMSIZ) == 0
 			&& ifp->if_snd[0].altq_index==index)
 		break;
@@ -4462,9 +4462,11 @@ int
 if_setsendqready(if_t ifp)
 {
 	for (int i = 0; i < MAXQ; i++) {
+	/*
 	  printf("if_setsendqready: %d ",i);
 	  if(ALTQ_IS_INUSE(&((struct ifnet *)ifp)->if_snd[i]))
 	    printf("I");
+	*/
 		IFQ_SET_READY(&((struct ifnet *)ifp)->if_snd[i]);
 	}
 	return (0);

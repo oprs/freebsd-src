@@ -367,20 +367,3 @@ device		netmap			# netmap(4) support
 options 	EVDEV_SUPPORT		# evdev support in legacy drivers
 device		evdev			# input event device support
 device		uinput			# install /dev/uinput cdev
-
-device pf
-device pflog
-
-options         ALTQ
-options         ALTQ_HFSC       # Hierarchical Packet Scheduler (HFSC)
-
-options KDB
-options DDB
-options DDB_CTF             # DTrace
-options KDTRACE_HOOKS       # DTrace
-options KDTRACE_FRAME       # DTrace
-options BREAK_TO_DEBUGGER
-options INVARIANTS
-options INVARIANT_SUPPORT
-makeoptions DEBUG=-g        # DTrace
-makeoptions WITH_CTF=1      # DTrace
