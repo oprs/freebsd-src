@@ -4036,14 +4036,14 @@ iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int
   if (altq) {
     txq->altq_packets++;
     if (txq->altq_sample_time+10<cur_time/machclk_freq) {
-      printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
+      //printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
       txq->altq_sample_time=cur_time/machclk_freq;
       txq->altq_packets=0;
     }
   } else {
     txq->non_altq_packets++;
     if (txq->non_altq_sample_time+10<cur_time/machclk_freq) {
-      printf("REG: %s Q%d %lu Pkts\n",ifname,index,txq->non_altq_packets);
+      //printf("REG: %s Q%d %lu Pkts\n",ifname,index,txq->non_altq_packets);
       txq->non_altq_sample_time=cur_time/machclk_freq;
       txq->non_altq_packets=0;
     }
