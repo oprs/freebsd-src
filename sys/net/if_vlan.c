@@ -75,6 +75,7 @@ __FBSDID("$FreeBSD$");
 #include <net/if_dl.h>
 #include <net/if_types.h>
 #include <net/if_vlan_var.h>
+#include <net/if_bng.h>
 #include <net/route.h>
 #include <net/vnet.h>
 
@@ -848,8 +849,10 @@ vlan_modevent(module_t mod, int type, void *data)
 #endif
 
 			       "\n");
+		bng_hijack_vlan();
 		break;
 	case MOD_UNLOAD:
+		bng_restore_vlan();
 #ifndef VIMAGE
 		if_clone_detach(vlan_cloner);
 #endif
