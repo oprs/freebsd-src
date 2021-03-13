@@ -2426,6 +2426,7 @@ pf_send_tcp(struct mbuf *replyto, const struct pf_rule *r, sa_family_t af,
 #ifdef ALTQ
 	if (r != NULL && r->qid) {
 		pf_mtag->qid = r->qid;
+		pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
 
 		/* add hints for ecn */
 		pf_mtag->hdr = mtod(m, struct ip *);
@@ -2661,6 +2662,7 @@ pf_send_icmp(struct mbuf *m, u_int8_t type, u_int8_t code, sa_family_t af,
 #ifdef ALTQ
 	if (r->qid) {
 		pf_mtag->qid = r->qid;
+		pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
 		/* add hints for ecn */
 		pf_mtag->hdr = mtod(m0, struct ip *);
 	}
@@ -6157,10 +6159,13 @@ done:
 		} else {
 			if (s != NULL)
 				pd.pf_mtag->qid_hash = pf_state_hash(s);
-			if (pqid || (pd.tos & IPTOS_LOWDELAY))
+			if (pqid || (pd.tos & IPTOS_LOWDELAY)) {
 				pd.pf_mtag->qid = r->pqid;
-			else
+			} else {
 				pd.pf_mtag->qid = r->qid;
+			}
+			pd.pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
+		
 			/* Add hints for ecn. */
 			pd.pf_mtag->hdr = h;
 		}
@@ -6604,6 +6609,8 @@ done:
 				pd.pf_mtag->qid = r->pqid;
 			else
 				pd.pf_mtag->qid = r->qid;
+			pd.pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
+			
 			/* Add hints for ecn. */
 			pd.pf_mtag->hdr = h;
 		}

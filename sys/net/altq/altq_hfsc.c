@@ -702,75 +702,55 @@ hfsc_nextclass(struct hfsc_class *cl)
 static int
 hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 {
-	//struct hfsc_if	*hif = (struct hfsc_if *)ifq->altq_disc;
-  struct hfsc_class *cl=NULL, *cl_d=NULL;
+        struct hfsc_class *cl=NULL; //, *cl_d=NULL;
 	struct pf_mtag *t;
-	//int lock_held=0;
 	int len=0;
-	int i=0;
-	// Skon - Loop through ifaltq's, trying to find the best place to send the packet.
+
 	struct hfsc_if	*hif = (struct hfsc_if *)ifq[0].altq_disc;
-	int q_idx=0,dq_idx=0;
-	while (cl == NULL && i<MAXQ) {
-	  // Add locking per queue
-	  if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i])) {
-	    //lock_held=IFQ_TRYLOCK(&ifq[i]);
-	    IFQ_LOCK(&ifq[i]);
-
-	    hif = (struct hfsc_if *)ifq[i].altq_disc;
-
-	    //IFQ_LOCK_ASSERT(&ifq[i]); // Skon: Removed
-	    
-	    /* grab class set by classifier */
-	    if ((m->m_flags & M_PKTHDR) == 0) {
-	      /* should not happen */
-	      printf("altq: packet for %s does not have pkthdr\n",
-		     ifq[i].altq_ifp->if_xname);
-	      m_freem(m);
-	      // Skon - unlock
-	      IFQ_UNLOCK(&ifq[i]);
-	      
-	      return (ENOBUFS);
-	    }
-	    // Skon
-	    //printf("E%d",ifq->altq_index);
-	    cl = NULL;
-	    if ((t = pf_find_mtag(m)) != NULL)
-	      cl = clh_to_clp(hif, t->qid);
-#ifdef ALTQ3_COMPAT
-	    else if ((ifq[i].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL)
-	      cl = pktattr->pattr_class;
-#endif
-	    if (cl != NULL) {
-	      //printf("E%d:%d ",i,ifq[i].ifq_len);
-	      q_idx=i;
-	    }
-	    if (cl_d==NULL) {
-	      if (cl == NULL || is_a_parent_class(cl)) {
-		cl_d = hif->hif_defaultclass;
-		dq_idx=i;
-		//printf("ED%d:%d ",i,ifq[i].ifq_len);
-	      }
-	    }
-	  // Skon - unlock 
-	  IFQ_UNLOCK(&ifq[i]);
-	  }
-	  //if (lock_held)
-	i++;
-	}
+	int q_idx=0;
 	
-	if (cl==NULL && cl_d!=NULL) {
-	  cl=cl_d;
-	  q_idx=dq_idx;
-	}
-
-	if (cl == NULL) {
+	/* grab class set by classifier */
+	if ((m->m_flags & M_PKTHDR) == 0) {
+	  /* should not happen */
+	  printf("altq: packet for %s does not have pkthdr\n",
+		 ifq[0].altq_ifp->if_xname);
 	  m_freem(m);
 	  
 	  return (ENOBUFS);
 	}
-	// Skon - now lock the queue we used
-	IFQ_LOCK(&ifq[q_idx]);
+	
+	t = pf_find_mtag(m); // Get the tag
+	if (t!=NULL) {
+	  
+	  q_idx=t->altq_index;
+	  if (q_idx>=MAXQ) {
+	    printf("Wow! too big! %d\n",q_idx);
+	    q_idx=0;
+	  }
+	  IFQ_LOCK(&ifq[q_idx]);
+    
+	  hif = (struct hfsc_if *)ifq[q_idx].altq_disc;
+	  
+	  cl = clh_to_clp(hif, t->qid);
+	} else {
+	   IFQ_LOCK(&ifq[q_idx]);
+
+#ifdef ALTQ3_COMPAT
+	   if ((ifq[0].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
+	      cl = pktattr->pattr_class;
+	      q_idx=0;
+	   }
+#endif
+	}
+	if (cl == NULL || is_a_parent_class(cl)) {
+	  cl = hif->hif_defaultclass;
+	}	
+
+	if (cl == NULL) {
+	  m_freem(m);	  
+	  IFQ_UNLOCK(&ifq[q_idx]);
+	  return (ENOBUFS);
+	}
 	
 #ifdef ALTQ3_COMPAT
 	if (pktattr != NULL)

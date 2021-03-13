@@ -1450,7 +1450,6 @@ pfctl_load_rule(struct pfctl *pf, char *path, struct pf_rule *r, int depth)
 			name = r->anchor->path;
 	} else
 		name = "";
-
 	if ((pf->opts & PF_OPT_NOACTION) == 0) {
 		if (pfctl_add_pool(pf, &r->rpool, r->af))
 			return (1);
@@ -1459,8 +1458,9 @@ pfctl_load_rule(struct pfctl *pf, char *path, struct pf_rule *r, int depth)
 		if (r->anchor && strlcpy(pr.anchor_call, name,
 		    sizeof(pr.anchor_call)) >= sizeof(pr.anchor_call))
 			errx(1, "pfctl_load_rule: strlcpy");
-		if (ioctl(pf->dev, DIOCADDRULE, &pr))
+		if (ioctl(pf->dev, DIOCADDRULE, &pr)) {
 			err(1, "DIOCADDRULE");
+		}
 	}
 
 	if (pf->opts & PF_OPT_VERBOSE) {

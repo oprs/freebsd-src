@@ -50,6 +50,7 @@ struct pf_mtag {
 	u_int16_t	 tag;		/* tag id */
 	u_int8_t	 flags;
 	u_int8_t	 routed;
+        u_int8_t	 altq_index;    /* Skon: multiqueue index */
 };
 
 static __inline struct pf_mtag *
