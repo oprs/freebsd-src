@@ -721,14 +721,14 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	
 	t = pf_find_mtag(m); // Get the tag
 	if (t!=NULL) {
-	  
+	  // If there is no tag, default to queue zero
 	  q_idx=t->altq_index;
 	  if (q_idx>=MAXQ) {
-	    printf("Wow! too big! %d\n",q_idx);
+	    printf("Queue number out of range! %d\n",q_idx);
 	    q_idx=0;
 	  }
 	}
-	
+	// Only work on valid queues 
 	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
 
 	  IFQ_LOCK(&ifq[q_idx]);
@@ -776,7 +776,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		set_active(cl, m_pktlen(m));
 	// Skon - add locking per queue
 	IFQ_UNLOCK(&ifq[q_idx]);
-	// Skon: return the negative of the queue number
+	// Skon: return the negative of the queue number to queue the transmit to the right queue
 	return (-q_idx);
 }
 
