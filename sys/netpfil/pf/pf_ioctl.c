@@ -594,10 +594,8 @@ tagname2tag2(struct pf_tagset *ts, char *tagname, uint8_t qindex, int opt)
 		if (strcmp(tagname, tag->name) == 0) {
 			tag->ref++;
 			if (!opt) {
-			  printf(" tag %s: %d\n",tagname,tag->tag);
 			  return (tag->tag);
 			} else {
-			  printf(" index %s: %d\n",tagname, tag->qindex);
 			  return (tag->qindex);
 			}
 		}
@@ -631,7 +629,7 @@ tagname2tag2(struct pf_tagset *ts, char *tagname, uint8_t qindex, int opt)
 		return (0);
 	tag->qindex=qindex;
 	strlcpy(tag->name, tagname, sizeof(tag->name));
-	printf("ADD: %s,%d,%d\n",tagname,new_tagid,qindex);
+	//printf("ADD: %s,%d,%d\n",tagname,new_tagid,qindex);
 	tag->tag = new_tagid;
 	tag->ref = 1;
 	/* Insert into namehash */
