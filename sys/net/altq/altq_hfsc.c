@@ -727,28 +727,28 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	    printf("Wow! too big! %d\n",q_idx);
 	    q_idx=0;
 	  }
+	}
+	
+	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
+
 	  IFQ_LOCK(&ifq[q_idx]);
-    
+	  
 	  hif = (struct hfsc_if *)ifq[q_idx].altq_disc;
 	  
-	  cl = clh_to_clp(hif, t->qid);
-	} else {
-	  IFQ_LOCK(&ifq[q_idx]);  // Lock the 0 queue
-	  hif = (struct hfsc_if *)ifq[q_idx].altq_disc;
+	  if (t!=NULL) 
+	    cl = clh_to_clp(hif, t->qid);
 
 #ifdef ALTQ3_COMPAT
-	   if ((ifq[q_idx].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
-	      cl = pktattr->pattr_class;
-	   }
+	  else if ((ifq[q_idx].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
+	    cl = pktattr->pattr_class;
+	  }
 #endif
-	}
-	if (cl == NULL || is_a_parent_class(cl)) {
-	  cl = hif->hif_defaultclass;
-	}	
-
-	if (cl == NULL) {
+	  if (cl == NULL || is_a_parent_class(cl)) {
+	    cl = hif->hif_defaultclass;
+	  }	
+   
+	} else {
 	  m_freem(m);	  
-	  IFQ_UNLOCK(&ifq[q_idx]);
 	  return (ENOBUFS);
 	}
 	

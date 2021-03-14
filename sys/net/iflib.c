@@ -4036,7 +4036,7 @@ iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int
   if (altq) {
     txq->altq_packets++;
     if (txq->altq_sample_time+10<cur_time/machclk_freq) {
-      //printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
+      printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
       txq->altq_sample_time=cur_time/machclk_freq;
       txq->altq_packets=0;
     }
@@ -4161,7 +4161,9 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	 */
 	//printf("%d",qidx);
 	txq = &ctx->ifc_txqs[qidx];
+#ifdef MULTIQ_TEST
 	iflib_queue_count(txq, m,ifp->if_xname,qidx,1);
+#endif
 #ifdef DRIVER_BACKPRESSURE
 	if (txq->ift_closed) {
 		while (m != NULL) {
@@ -4247,6 +4249,7 @@ iflib_altq_if_start2(if_t ifp, int i)
 {
 	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
+	//printf("%d",i);
 	/* Skon: Use the right queue if index >= 0 */
 	if (i>=0) {
 	if (ifq[i].ifq_len > 0) {
