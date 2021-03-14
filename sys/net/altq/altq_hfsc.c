@@ -706,7 +706,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	struct pf_mtag *t;
 	int len=0;
 
-	struct hfsc_if	*hif = (struct hfsc_if *)ifq[0].altq_disc;
+	struct hfsc_if	*hif; // = (struct hfsc_if *)ifq[0].altq_disc;
 	int q_idx=0;
 	
 	/* grab class set by classifier */
@@ -733,12 +733,12 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  
 	  cl = clh_to_clp(hif, t->qid);
 	} else {
-	   IFQ_LOCK(&ifq[q_idx]);
+	  IFQ_LOCK(&ifq[q_idx]);  // Lock the 0 queue
+	  hif = (struct hfsc_if *)ifq[q_idx].altq_disc;
 
 #ifdef ALTQ3_COMPAT
-	   if ((ifq[0].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
+	   if ((ifq[q_idx].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
 	      cl = pktattr->pattr_class;
-	      q_idx=0;
 	   }
 #endif
 	}
