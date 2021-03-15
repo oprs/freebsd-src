@@ -288,7 +288,7 @@ hfsc_remove_queue(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
 	struct hfsc_class *cl;
-	printf("hfsc_remove_altq: %d\n",a->altq_index);
+	//printf("hfsc_remove_altq: %d\n",a->altq_index);
 
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
