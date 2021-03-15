@@ -74,6 +74,8 @@
 #include <net/altq/altq_conf.h>
 #endif
 
+#include <sys/libkern.h>
+
 /*
  * function prototypes
  */
@@ -723,10 +725,23 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	if (t!=NULL) {
 	  // If there is no tag, default to queue zero
 	  q_idx=t->altq_index;
+	  //printf("Q%d",q_idx);
 	  if (q_idx>=MAXQ) {
 	    printf("Queue number out of range! %d\n",q_idx);
 	    q_idx=0;
 	  }
+	} else {
+	  // Pick random queue
+	  int queues[MAXQ];
+	  int j=0;
+	  for (int i=0; i<MAXQ; i++) {
+	    // horrible solution, but find all active queues
+	    if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i]))  {
+	      queues[j++]=i;
+	    }
+	  }
+	  int k=random()%j;
+	  q_idx=queues[k];
 	}
 	// Only work on valid queues 
 	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
@@ -745,6 +760,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 #endif
 	  if (cl == NULL || is_a_parent_class(cl)) {
 	    cl = hif->hif_defaultclass;
+	    //printf("DQ%d",q_idx);
 	  }	
    
 	} else {
