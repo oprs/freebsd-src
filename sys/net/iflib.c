@@ -4036,7 +4036,8 @@ iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int
   if (altq) {
     txq->altq_packets++;
     if (txq->altq_sample_time+10<cur_time/machclk_freq) {
-      //printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
+      if (bootverbose)
+        printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
       txq->altq_sample_time=cur_time/machclk_freq;
       txq->altq_packets=0;
     }
