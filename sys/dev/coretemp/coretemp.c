@@ -312,8 +312,11 @@ static uint64_t
 coretemp_get_thermal_msr(int cpu)
 {
 	uint64_t msr;
+	int oldprio;
 
 	thread_lock(curthread);
+	oldprio = curthread->td_priority;
+	sched_prio(curthread, PI_NET-4);
 	sched_bind(curthread, cpu);
 	thread_unlock(curthread);
 
@@ -331,6 +334,7 @@ coretemp_get_thermal_msr(int cpu)
 
 	thread_lock(curthread);
 	sched_unbind(curthread);
+	sched_prio(curthread, oldprio);
 	thread_unlock(curthread);
 
 	return (msr);
@@ -339,7 +343,11 @@ coretemp_get_thermal_msr(int cpu)
 static void
 coretemp_clear_thermal_msr(int cpu)
 {
+	int oldprio;
+
 	thread_lock(curthread);
+	oldprio = curthread->td_priority;
+	sched_prio(curthread, PI_NET-4);
 	sched_bind(curthread, cpu);
 	thread_unlock(curthread);
 
@@ -347,6 +355,7 @@ coretemp_clear_thermal_msr(int cpu)
 
 	thread_lock(curthread);
 	sched_unbind(curthread);
+	sched_prio(curthread, oldprio);
 	thread_unlock(curthread);
 }
 
