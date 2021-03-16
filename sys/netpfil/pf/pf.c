@@ -142,6 +142,10 @@ VNET_DEFINE(int,			 pf_tcp_iss_off);
 VNET_DECLARE(int,			 pf_vnet_active);
 #define	V_pf_vnet_active		 VNET(pf_vnet_active)
 
+#define TAGID_MAX        50000
+VNET_DECLARE(u_int8_t, qid_to_idx[TAGID_MAX]); // Skon - Index mapping
+#define V_qid_to_idx VNET(qid_to_idx)
+                
 VNET_DEFINE_STATIC(uint32_t, pf_purge_idx);
 #define V_pf_purge_idx	VNET(pf_purge_idx)
 
@@ -2426,7 +2430,7 @@ pf_send_tcp(struct mbuf *replyto, const struct pf_rule *r, sa_family_t af,
 #ifdef ALTQ
 	if (r != NULL && r->qid) {
 		pf_mtag->qid = r->qid;
-		pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
+		pf_mtag->altq_index=V_qid_to_idx[r->qid];  // Skon - for multiqueue
 
 		/* add hints for ecn */
 		pf_mtag->hdr = mtod(m, struct ip *);
@@ -2662,7 +2666,7 @@ pf_send_icmp(struct mbuf *m, u_int8_t type, u_int8_t code, sa_family_t af,
 #ifdef ALTQ
 	if (r->qid) {
 		pf_mtag->qid = r->qid;
-		pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
+		pf_mtag->altq_index=V_qid_to_idx[r->qid];  // Skon - for multiqueue
 		/* add hints for ecn */
 		pf_mtag->hdr = mtod(m0, struct ip *);
 	}
@@ -6164,7 +6168,7 @@ done:
 			} else {
 				pd.pf_mtag->qid = r->qid;
 			}
-			pd.pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
+			pd.pf_mtag->altq_index=V_qid_to_idx[r->qid];  // Skon - for multiqueue
 		
 			/* Add hints for ecn. */
 			pd.pf_mtag->hdr = h;
@@ -6609,7 +6613,7 @@ done:
 				pd.pf_mtag->qid = r->pqid;
 			else
 				pd.pf_mtag->qid = r->qid;
-			pd.pf_mtag->altq_index=r->altq_index;  // Skon - for multiqueue
+			pd.pf_mtag->altq_index=V_qid_to_idx[r->qid];  // Skon - for multiqueue
 			
 			/* Add hints for ecn. */
 			pd.pf_mtag->hdr = h;

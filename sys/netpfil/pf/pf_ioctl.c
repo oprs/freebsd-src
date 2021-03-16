@@ -104,7 +104,7 @@ static int		 pf_rollback_altq(u_int32_t);
 static int		 pf_commit_altq(u_int32_t);
 static int		 pf_enable_altq(struct pf_altq *);
 static int		 pf_disable_altq(struct pf_altq *);
-static u_int32_t	 pf_qname2qid(char *,u_int8_t,int);
+static u_int32_t	 pf_qname2qid(char *);
 static void		 pf_qid_unref(u_int32_t);
 #endif /* ALTQ */
 static int		 pf_begin_rules(u_int32_t *, int, const char *);
@@ -136,7 +136,6 @@ struct pf_tagname {
 	TAILQ_ENTRY(pf_tagname)	taghash_entries;
 	char			name[PF_TAG_NAME_SIZE];
 	uint16_t		tag;
-        uint8_t	  	        qindex; // Skon: Used for queue index when needed
 	int			ref;
 };
 
@@ -165,6 +164,10 @@ SYSCTL_UINT(_net_pf, OID_AUTO, queue_tag_hashsize, CTLFLAG_RDTUN,
     &pf_queue_tag_hashsize, PF_QUEUE_TAG_HASH_SIZE_DEFAULT,
     "Size of pf(4) queue tag hashtable");
 #endif
+
+VNET_DEFINE(u_int8_t, qid_to_idx[TAGID_MAX]); // Skon - Index mapping
+#define V_qid_to_idx VNET(qid_to_idx)
+
 
 VNET_DEFINE(uma_zone_t,	 pf_tag_z);
 #define	V_pf_tag_z		 VNET(pf_tag_z)
@@ -569,69 +572,7 @@ tagname2tag(struct pf_tagset *ts, char *tagname)
 	strlcpy(tag->name, tagname, sizeof(tag->name));
 	tag->tag = new_tagid;
 	tag->ref = 1;
-	/* Insert into namehash */
-	TAILQ_INSERT_TAIL(&ts->namehash[index], tag, namehash_entries);
 
-	/* Insert into taghash */
-	index = tag2hashindex(ts, new_tagid);
-	TAILQ_INSERT_TAIL(&ts->taghash[index], tag, taghash_entries);
-
-	return (tag->tag);
-}
-
-// Skon: New version with queue index
-// IF opt = 0 do a normal (tag) lookup or insertion, otherwise do a index lookup
-static u_int16_t
-tagname2tag2(struct pf_tagset *ts, char *tagname, uint8_t qindex, int opt)
-{
-	struct pf_tagname	*tag;
-	u_int32_t		 index;
-	u_int16_t		 new_tagid;
-
-	PF_RULES_WASSERT();
-	index = tagname2hashindex(ts, tagname);
-	TAILQ_FOREACH(tag, &ts->namehash[index], namehash_entries)
-		if (strcmp(tagname, tag->name) == 0) {
-			tag->ref++;
-			if (!opt) {
-			  return (tag->tag);
-			} else {
-			  return (tag->qindex);
-			}
-		}
-	if (opt) {
-	  printf("Error - tag to index lookup failed\n");
-	}
-
-	/*
-	 * new entry
-	 *
-	 * to avoid fragmentation, we do a linear search from the beginning
-	 * and take the first free slot we find.
-	 */
-	new_tagid = BIT_FFS(TAGID_MAX, &ts->avail);
-	/*
-	 * Tags are 1-based, with valid tags in the range [1..TAGID_MAX].
-	 * BIT_FFS() returns a 1-based bit number, with 0 indicating no bits
-	 * set.  It may also return a bit number greater than TAGID_MAX due
-	 * to rounding of the number of bits in the vector up to a multiple
-	 * of the vector word size at declaration/allocation time.
-	 */
-	if ((new_tagid == 0) || (new_tagid > TAGID_MAX))
-		return (0);
-
-	/* Mark the tag as in use.  Bits are 0-based for BIT_CLR() */
-	BIT_CLR(TAGID_MAX, new_tagid - 1, &ts->avail);
-
-	/* allocate and fill new struct pf_tagname */
-	tag = uma_zalloc(V_pf_tag_z, M_NOWAIT);
-	if (tag == NULL)
-		return (0);
-	tag->qindex=qindex;
-	strlcpy(tag->name, tagname, sizeof(tag->name));
-	//printf("ADD: %s,%d,%d\n",tagname,new_tagid,qindex);
-	tag->tag = new_tagid;
-	tag->ref = 1;
 	/* Insert into namehash */
 	TAILQ_INSERT_TAIL(&ts->namehash[index], tag, namehash_entries);
 
@@ -674,11 +615,10 @@ pf_tagname2tag(char *tagname)
 }
 
 #ifdef ALTQ
-// Skon: changes to iclude queue index
 static u_int32_t
-pf_qname2qid(char *qname, u_int8_t index, int opt)
+pf_qname2qid(char *qname)
 {
-  return ((u_int32_t)tagname2tag2(&V_pf_qids, qname, index, opt));
+  return ((u_int32_t)tagname2tag(&V_pf_qids, qname));
 }
 
 static void
@@ -815,8 +755,6 @@ pf_enable_altq(struct pf_altq *altq)
 		return (EINVAL);
 
 	if (ifp->if_snd[index].altq_type != ALTQT_NONE) {
-	  // skon
-
 	  //printf("pf_enable_altq: %s %d\n",altq->ifname, index); 
 	  error = altq_enable(&ifp->if_snd[index]);
 
@@ -933,8 +871,8 @@ pf_altq_ifnet_event(struct ifnet *ifp, int remove)
 		}
 		bcopy(a1, a2, sizeof(struct pf_altq));
 		// Skon
-		//printf("Index: %s:%d\n",a2->qname,a2->altq_index);
-		if ((a2->qid = pf_qname2qid(a2->qname,a2->altq_index,0)) == 0) {
+		//printf("Event: %s:%d\n",a2->qname,a2->altq_index);
+		if ((a2->qid = pf_qname2qid(a2->qname)) == 0) {
 			error = EBUSY;
 			free(a2, M_PFALTQ);
 			break;
@@ -1289,6 +1227,7 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 			COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	case 1:	{
@@ -1313,6 +1252,7 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 		COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	default:
@@ -1396,6 +1336,7 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 			COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	case 1: {
@@ -1420,6 +1361,7 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 		COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	default:
@@ -1697,22 +1639,17 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 
 #ifdef ALTQ
 		/* set queue IDs */
-		//printf("Skon 1 %s\n",rule->qname);
 		if (rule->qname[0] != 0) {
-		  if ((rule->qid = pf_qname2qid(rule->qname,0,0)) == 0) {
+		  if ((rule->qid = pf_qname2qid(rule->qname)) == 0) {
 				error = EBUSY;
 		  } else if (rule->pqname[0] != 0) {
 				if ((rule->pqid =
-				     pf_qname2qid(rule->pqname,0,0)) == 0)
+				     pf_qname2qid(rule->pqname)) == 0)
 					error = EBUSY;
 		  } else {
 				rule->pqid = rule->qid;
 		  }
 	     
-		  // Skon
-		  u_int index = pf_qname2qid(rule->qname,0,1);
-		  rule->altq_index = index;
-		
 		}
 #endif
 		if (rule->tagname[0])
@@ -1967,21 +1904,16 @@ DIOCADDRULE_error:
 			/* set queue IDs */
 			if (newrule->qname[0] != 0) {
 				if ((newrule->qid =
-				     pf_qname2qid(newrule->qname,0,0)) == 0)
+				     pf_qname2qid(newrule->qname)) == 0)
 					error = EBUSY;
 				else if (newrule->pqname[0] != 0) {
 					if ((newrule->pqid =
-					     pf_qname2qid(newrule->pqname,0,0)) == 0)
+					     pf_qname2qid(newrule->pqname)) == 0)
 						error = EBUSY;
 				} else {
 					newrule->pqid = newrule->qid;
 				}
 	      
-				// Skon
-				u_int index = pf_qname2qid(newrule->qname,0,1);
-				newrule->altq_index = index;
-	
-
 			}
 #endif /* ALTQ */
 			if (newrule->tagname[0])
@@ -2566,8 +2498,6 @@ DIOCGETSTATES_full:
 
 		altq = malloc(sizeof(*altq), M_PFALTQ, M_WAITOK | M_ZERO);
 		error = pf_import_kaltq(pa, altq, IOCPARM_LEN(cmd));
-		// SKON - use local_flags to carry index
-		altq->altq_index=pa->altq.local_flags;
 
 		if (error)
 			break;
@@ -2587,22 +2517,23 @@ DIOCGETSTATES_full:
 		 * copy the necessary fields
 		 */
 		if (altq->qname[0] != 0) {
-		  if ((altq->qid = pf_qname2qid(altq->qname,altq->altq_index,0)) == 0) {
+		  if ((altq->qid = pf_qname2qid(altq->qname)) == 0) {
 				PF_RULES_WUNLOCK();
 				error = EBUSY;
 				free(altq, M_PFALTQ);
 				break;
-			}
+		        }
 			altq->altq_disc = NULL;
 			TAILQ_FOREACH(a, V_pf_altq_ifs_inactive, entries) {
 				//if (strncmp(a->ifname, altq->ifname,
 				//  IFNAMSIZ) == 0) {
 				// Skon: change to look at BOTH interface and index
-				//printf("pf_ioctl.c: DIOCADDALTQV1 %s %d %s, %p\n",a->ifname,a->altq_index,a->qname,a->altq_disc);
+				//printf("ADD QUEUE %s %d %s\n",a->ifname,a->altq_index,a->qname);
 				if (strncmp(a->ifname, altq->ifname, IFNAMSIZ) == 0 &&
 				    a->altq_index == altq->altq_index) {
 					altq->altq_disc = a->altq_disc;
-					//printf("Found Interface: %p, %s, %d\n",altq->altq_disc,altq->qname,altq->altq_index);
+					V_qid_to_idx[altq->qid]=altq->altq_index;
+					//printf("Add Queue: %s, %d\n",altq->qname,altq->altq_index);
 					break;
 				}
 			}
