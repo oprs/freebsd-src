@@ -57,7 +57,7 @@ struct service_curve_v1 {
 
 /* Latest version of struct service_curve_vX */
 #define HFSC_SERVICE_CURVE_VERSION	1
-	
+
 /* special class handles */
 #define	HFSC_NULLCLASS_HANDLE	0
 #define	HFSC_CLASS_SLOTS	128
