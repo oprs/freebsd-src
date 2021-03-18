@@ -996,8 +996,7 @@ check_commit_hfsc(int dev, int opts, struct pfctl_altq *if_ppa)
 {
 
 	/* check if hfsc has one default queue for this interface */
-        /* Skon - reduce to less  then or equal to 1, must still check */
-        /* At least one across interface queues */
+        /* Exactly one per root interface queues */
         if (if_ppa->meta.default_classes != 1) {
             warnx("must have exactly one default queue on %s, queue %s", if_ppa->pa.ifname, if_ppa->pa.ifname);
             return (1);

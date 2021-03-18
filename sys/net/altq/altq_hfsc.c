@@ -714,6 +714,9 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 
 	struct hfsc_if	*hif; // = (struct hfsc_if *)ifq[0].altq_disc;
 	int q_idx=0;
+
+	u_int64_t cur_time;
+	cur_time = read_machclk();
 	
 	/* grab class set by classifier */
 	if ((m->m_flags & M_PKTHDR) == 0) {
@@ -756,7 +759,6 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  
 	  if (t!=NULL) 
 	    cl = clh_to_clp(hif, t->qid);
-
 #ifdef ALTQ3_COMPAT
 	  else if ((ifq[q_idx].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
 	    cl = pktattr->pattr_class;
@@ -765,12 +767,27 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  if (cl == NULL || is_a_parent_class(cl)) {
 	    cl = hif->hif_defaultclass;
 	    //printf("DQ%d",q_idx);
-	  }	
-   
+	  }
+	  //	  if (t!=NULL)
+	  //  printf("Q%d:%d ",t->qid,q_idx);
+	  //else
+	  //  printf("N%d ",q_idx);
 	} else {
 	  m_freem(m);	  
 	  return (ENOBUFS);
 	}
+
+	// Skon - report per queue statistics           
+        /*ifq[q_idx].altq_packets_sec++;
+        ifq[q_idx].altq_bytes_sec+=len;
+        if (ifq[q_idx].altq_sample_time+10<cur_time/machclk_freq) {
+          printf("Enqueue %s Q%d:%d %lu Pkts %lu B\n",ifq[q_idx].altq_ifp->if_xname,
+                 ifq[q_idx].altq_index,q_idx,ifq[q_idx].altq_packets_sec,ifq[q_idx].altq_bytes_sec);
+          ifq[q_idx].altq_sample_time=cur_time/machclk_freq;
+          ifq[q_idx].altq_packets_sec=0;
+          ifq[q_idx].altq_bytes_sec=0;
+          }*/
+
 	
 #ifdef ALTQ3_COMPAT
 	if (pktattr != NULL)
@@ -881,7 +898,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			hif->hif_pollcache = cl;
 			m = hfsc_pollq(cl);
 			// Skon - report per queue statistics
-			/*len = m_pktlen(m);
+			len = m_pktlen(m);
 			ifq->altq_packets_sec++;
 			ifq->altq_bytes_sec+=len;
 			if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
@@ -890,7 +907,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			  ifq->altq_sample_time=cur_time/machclk_freq;
 			  ifq->altq_packets_sec=0;
 			  ifq->altq_bytes_sec=0;
-			  }*/	
+			  }	
 	
 			return (m);
 		}
@@ -907,17 +924,17 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	IFQ_DEC_LEN(ifq);
 	PKTCNTR_ADD(&cl->cl_stats.xmit_cnt, len);
 
-	// Skon - report per queue statistics
-	/*ifq->altq_packets_sec++;
+	/*// Skon - report per queue statistics
+	ifq->altq_packets_sec++;
 	ifq->altq_bytes_sec+=len;
 	if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
-	  printf("%s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
+	  printf("Dequeue %s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
 		 ifq->altq_index,ifq->altq_packets_sec,ifq->altq_bytes_sec);
 	  ifq->altq_sample_time=cur_time/machclk_freq;
 	  ifq->altq_packets_sec=0;
 	  ifq->altq_bytes_sec=0;
-	  }*/	
-	
+	  }	
+	*/
 	update_vf(cl, len, cur_time);
 	if (realtime)
 		cl->cl_cumul += len;

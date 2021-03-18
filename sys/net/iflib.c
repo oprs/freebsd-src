@@ -4160,7 +4160,8 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	/*
 	 * XXX calculate buf_ring based on flowid (divvy up bits?)
 	 */
-	//printf("%d",qidx);
+	//if (index!=qidx)
+	//  printf("%d:%d ",index,qidx);
 	txq = &ctx->ifc_txqs[qidx];
 #ifdef MULTIQ_TEST
 	iflib_queue_count(txq, m,ifp->if_xname,qidx,1);
@@ -4253,15 +4254,15 @@ iflib_altq_if_start2(if_t ifp, int i)
 	//printf("%d",i);
 	/* Skon: Use the right queue if index >= 0 */
 	if (i>=0) {
-	if (ifq[i].ifq_len > 0) {
-	  IFQ_LOCK(&ifq[i]);                                                                                         
-	  IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                                                            
-	  while (m != NULL) {                                                                                        
-	    iflib_if_transmit_altq(ifp, m, i);                                                                       
-	    IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                                                          
-	  }                                                                                                          
-	  IFQ_UNLOCK(&ifq[i]);                                                                                       
-	}
+	  if (ifq[i].ifq_len > 0) {
+	    IFQ_LOCK(&ifq[i]);                                                                                         
+	    IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                                                            
+	    while (m != NULL) {                                                                                        
+	      iflib_if_transmit_altq(ifp, m, i);                                                                       
+	      IFQ_DEQUEUE_NOLOCK(&ifq[i], m);                                                                          
+	    }                                                                                                          
+	    IFQ_UNLOCK(&ifq[i]);                                                                                       
+	  }
 	} else {
 	
 	// Find the first queue with data
