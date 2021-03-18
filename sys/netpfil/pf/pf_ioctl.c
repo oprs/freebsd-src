@@ -710,8 +710,9 @@ pf_commit_altq(u_int32_t ticket)
 		if ((altq->local_flags & PFALTQ_FLAG_IF_REMOVED) == 0) {
 			/* attach the discipline */
 			error = altq_pfattach(altq);
-			if (error == 0 && V_pf_altq_running)
-				error = pf_enable_altq(altq);
+			if (error == 0 && V_pf_altq_running) {
+			  error = pf_enable_altq(altq);
+			}
 			if (error != 0)
 				return (error);
 		}
@@ -2458,7 +2459,7 @@ DIOCGETSTATES_full:
 		PF_RULES_WLOCK();
 		/* enable all altq interfaces on active list */
 		TAILQ_FOREACH(altq, V_pf_altq_ifs_active, entries) {
-			if ((altq->local_flags & PFALTQ_FLAG_IF_REMOVED) == 0) {
+		        if ((altq->local_flags & PFALTQ_FLAG_IF_REMOVED) == 0) {
 				error = pf_enable_altq(altq);
 				if (error != 0)
 					break;
@@ -2528,12 +2529,12 @@ DIOCGETSTATES_full:
 				//if (strncmp(a->ifname, altq->ifname,
 				//  IFNAMSIZ) == 0) {
 				// Skon: change to look at BOTH interface and index
-				//printf("ADD QUEUE %s %d %s\n",a->ifname,a->altq_index,a->qname);
 				if (strncmp(a->ifname, altq->ifname, IFNAMSIZ) == 0 &&
 				    a->altq_index == altq->altq_index) {
 					altq->altq_disc = a->altq_disc;
+					// Skon: Save index in index map
 					V_qid_to_idx[altq->qid]=altq->altq_index;
-					//printf("Add Queue: %s, %d\n",altq->qname,altq->altq_index);
+					printf("Add Queue: %s:%s QID: %d Index: %d\n",altq->ifname,altq->qname,altq->qid,altq->altq_index);
 					break;
 				}
 			}

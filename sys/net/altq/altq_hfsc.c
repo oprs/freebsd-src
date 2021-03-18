@@ -75,6 +75,10 @@
 #endif
 
 #include <sys/libkern.h>
+#define TAGID_MAX        50000
+VNET_DECLARE(u_int8_t, qid_to_idx[TAGID_MAX]); // Skon - Index mapping          
+#define V_qid_to_idx VNET(qid_to_idx)
+
 
 /*
  * function prototypes
@@ -723,15 +727,14 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	
 	t = pf_find_mtag(m); // Get the tag
 	if (t!=NULL) {
-	  // If there is no tag, default to queue zero
-	  q_idx=t->altq_index;
-	  //printf("Q%d",q_idx);
+	  // lookup the index using the qid
+	  q_idx=V_qid_to_idx[t->qid];
 	  if (q_idx>=MAXQ) {
 	    printf("Queue number out of range! %d\n",q_idx);
 	    q_idx=0;
 	  }
 	} else {
-	  // Pick random queue
+	  // Pick random queue if there is no tag
 	  int queues[MAXQ];
 	  int j=0;
 	  for (int i=0; i<MAXQ; i++) {
@@ -742,6 +745,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  }
 	  int k=random()%j;
 	  q_idx=queues[k];
+	  //printf("R%d",q_idx);	  
 	}
 	// Only work on valid queues 
 	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
