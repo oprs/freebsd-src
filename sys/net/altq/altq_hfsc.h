@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-/* buildbot trigger #6 */
+/* buildbot trigger #7 */
 
 struct service_curve_v0 {
 	u_int	m1;	/* slope of the first segment in bits/sec */
