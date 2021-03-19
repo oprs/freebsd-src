@@ -74,6 +74,12 @@
 #include <net/altq/altq_conf.h>
 #endif
 
+#include <sys/libkern.h>
+#define TAGID_MAX        50000
+VNET_DECLARE(u_int8_t, qid_to_idx[TAGID_MAX]); // Skon - Index mapping          
+#define V_qid_to_idx VNET(qid_to_idx)
+
+
 /*
  * function prototypes
  */
@@ -702,75 +708,86 @@ hfsc_nextclass(struct hfsc_class *cl)
 static int
 hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 {
-	//struct hfsc_if	*hif = (struct hfsc_if *)ifq->altq_disc;
-  struct hfsc_class *cl=NULL, *cl_d=NULL;
+        struct hfsc_class *cl=NULL; //, *cl_d=NULL;
 	struct pf_mtag *t;
-	//int lock_held=0;
 	int len=0;
-	int i=0;
-	// Skon - Loop through ifaltq's, trying to find the best place to send the packet.
-	struct hfsc_if	*hif = (struct hfsc_if *)ifq[0].altq_disc;
-	int q_idx=0,dq_idx=0;
-	while (cl == NULL && i<MAXQ) {
-	  // Add locking per queue
-	  if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i])) {
-	    //lock_held=IFQ_TRYLOCK(&ifq[i]);
-	    IFQ_LOCK(&ifq[i]);
 
-	    hif = (struct hfsc_if *)ifq[i].altq_disc;
+	struct hfsc_if	*hif; // = (struct hfsc_if *)ifq[0].altq_disc;
+	int q_idx=0;
 
-	    //IFQ_LOCK_ASSERT(&ifq[i]); // Skon: Removed
-	    
-	    /* grab class set by classifier */
-	    if ((m->m_flags & M_PKTHDR) == 0) {
-	      /* should not happen */
-	      printf("altq: packet for %s does not have pkthdr\n",
-		     ifq[i].altq_ifp->if_xname);
-	      m_freem(m);
-	      // Skon - unlock
-	      IFQ_UNLOCK(&ifq[i]);
-	      
-	      return (ENOBUFS);
-	    }
-	    // Skon
-	    //printf("E%d",ifq->altq_index);
-	    cl = NULL;
-	    if ((t = pf_find_mtag(m)) != NULL)
-	      cl = clh_to_clp(hif, t->qid);
-#ifdef ALTQ3_COMPAT
-	    else if ((ifq[i].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL)
-	      cl = pktattr->pattr_class;
-#endif
-	    if (cl != NULL) {
-	      //printf("E%d:%d ",i,ifq[i].ifq_len);
-	      q_idx=i;
-	    }
-	    if (cl_d==NULL) {
-	      if (cl == NULL || is_a_parent_class(cl)) {
-		cl_d = hif->hif_defaultclass;
-		dq_idx=i;
-		//printf("ED%d:%d ",i,ifq[i].ifq_len);
-	      }
-	    }
-	  // Skon - unlock 
-	  IFQ_UNLOCK(&ifq[i]);
-	  }
-	  //if (lock_held)
-	i++;
-	}
+	u_int64_t cur_time;
+	cur_time = read_machclk();
 	
-	if (cl==NULL && cl_d!=NULL) {
-	  cl=cl_d;
-	  q_idx=dq_idx;
-	}
-
-	if (cl == NULL) {
+	/* grab class set by classifier */
+	if ((m->m_flags & M_PKTHDR) == 0) {
+	  /* should not happen */
+	  printf("altq: packet for %s does not have pkthdr\n",
+		 ifq[0].altq_ifp->if_xname);
 	  m_freem(m);
 	  
 	  return (ENOBUFS);
 	}
-	// Skon - now lock the queue we used
-	IFQ_LOCK(&ifq[q_idx]);
+	
+	t = pf_find_mtag(m); // Get the tag
+	if (t!=NULL) {
+	  // lookup the index using the qid
+	  q_idx=V_qid_to_idx[t->qid];
+	  if (q_idx>=MAXQ) {
+	    printf("Queue number out of range! %d\n",q_idx);
+	    q_idx=0;
+	  }
+	} else {
+	  // Pick random queue if there is no tag
+	  int queues[MAXQ];
+	  int j=0;
+	  for (int i=0; i<MAXQ; i++) {
+	    // horrible solution, but find all active queues
+	    if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i]))  {
+	      queues[j++]=i;
+	    }
+	  }
+	  int k=random()%j;
+	  q_idx=queues[k];
+	  //printf("R%d",q_idx);	  
+	}
+	// Only work on valid queues 
+	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
+
+	  IFQ_LOCK(&ifq[q_idx]);
+	  
+	  hif = (struct hfsc_if *)ifq[q_idx].altq_disc;
+	  
+	  if (t!=NULL) 
+	    cl = clh_to_clp(hif, t->qid);
+#ifdef ALTQ3_COMPAT
+	  else if ((ifq[q_idx].altq_flags & ALTQF_CLASSIFY) && pktattr != NULL) {
+	    cl = pktattr->pattr_class;
+	  }
+#endif
+	  if (cl == NULL || is_a_parent_class(cl)) {
+	    cl = hif->hif_defaultclass;
+	    //printf("DQ%d",q_idx);
+	  }
+	  //	  if (t!=NULL)
+	  //  printf("Q%d:%d ",t->qid,q_idx);
+	  //else
+	  //  printf("N%d ",q_idx);
+	} else {
+	  m_freem(m);	  
+	  return (ENOBUFS);
+	}
+
+	// Skon - report per queue statistics           
+        /*ifq[q_idx].altq_packets_sec++;
+        ifq[q_idx].altq_bytes_sec+=len;
+        if (ifq[q_idx].altq_sample_time+10<cur_time/machclk_freq) {
+          printf("Enqueue %s Q%d:%d %lu Pkts %lu B\n",ifq[q_idx].altq_ifp->if_xname,
+                 ifq[q_idx].altq_index,q_idx,ifq[q_idx].altq_packets_sec,ifq[q_idx].altq_bytes_sec);
+          ifq[q_idx].altq_sample_time=cur_time/machclk_freq;
+          ifq[q_idx].altq_packets_sec=0;
+          ifq[q_idx].altq_bytes_sec=0;
+          }*/
+
 	
 #ifdef ALTQ3_COMPAT
 	if (pktattr != NULL)
@@ -796,7 +813,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		set_active(cl, m_pktlen(m));
 	// Skon - add locking per queue
 	IFQ_UNLOCK(&ifq[q_idx]);
-	// Skon: return the negative of the queue number
+	// Skon: return the negative of the queue number to queue the transmit to the right queue
 	return (-q_idx);
 }
 
@@ -881,7 +898,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			hif->hif_pollcache = cl;
 			m = hfsc_pollq(cl);
 			// Skon - report per queue statistics
-			/*len = m_pktlen(m);
+			len = m_pktlen(m);
 			ifq->altq_packets_sec++;
 			ifq->altq_bytes_sec+=len;
 			if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
@@ -890,7 +907,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			  ifq->altq_sample_time=cur_time/machclk_freq;
 			  ifq->altq_packets_sec=0;
 			  ifq->altq_bytes_sec=0;
-			  }*/	
+			  }	
 	
 			return (m);
 		}
@@ -907,17 +924,17 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	IFQ_DEC_LEN(ifq);
 	PKTCNTR_ADD(&cl->cl_stats.xmit_cnt, len);
 
-	// Skon - report per queue statistics
-	/*ifq->altq_packets_sec++;
+	/*// Skon - report per queue statistics
+	ifq->altq_packets_sec++;
 	ifq->altq_bytes_sec+=len;
 	if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
-	  printf("%s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
+	  printf("Dequeue %s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
 		 ifq->altq_index,ifq->altq_packets_sec,ifq->altq_bytes_sec);
 	  ifq->altq_sample_time=cur_time/machclk_freq;
 	  ifq->altq_packets_sec=0;
 	  ifq->altq_bytes_sec=0;
-	  }*/	
-	
+	  }	
+	*/
 	update_vf(cl, len, cur_time);
 	if (realtime)
 		cl->cl_cumul += len;

@@ -155,6 +155,7 @@ struct pf_altq_v0 {
 	} pq_u;
 
 	uint32_t		 qid;		/* return value */
+	uint8_t                 altq_index;     /* SKON: add an index for multiple queue sets */
 };
 
 struct pf_altq_v1 {

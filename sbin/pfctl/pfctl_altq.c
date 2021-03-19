@@ -141,8 +141,6 @@ pfaltq_store(struct pf_altq *a)
 	ENTRY 			 item;
 	ENTRY			*ret_item;
 	size_t			 key_size;
-	// skon
-	//printf("pfaltq_store: %s, %s, %d\n",a->ifname,a->qname,a->altq_index);
 
 	if ((altq = malloc(sizeof(*altq))) == NULL)
 		err(1, "queue malloc");
@@ -155,14 +153,12 @@ pfaltq_store(struct pf_altq *a)
 		if ((item.key = malloc(key_size)) == NULL)
 			err(1, "if map key malloc");
 		snprintf(item.key, key_size, "%s:%d",altq->pa.ifname,altq->pa.altq_index);
-		//printf("pfaltq_store if key: %s\n",item.key);
 
 	        //item.key = altq->pa.ifname;
 		item.data = altq;
 		if (hsearch_r(item, ENTER, &ret_item, &if_map) == 0)
 			err(1, "interface map insert");
 		STAILQ_INSERT_TAIL(&interfaces, altq, meta.link);
-		//printf("pfaltq_store: adding %s\n",item.key);
 	} else {
 	        // Skon - Add index to ifname
 	        key_size = sizeof(a->ifname) + sizeof(a->qname)+2;
@@ -182,8 +178,6 @@ pfaltq_store(struct pf_altq *a)
 		item.data = &altq->pa.qid;
 		if (hsearch_r(item, ENTER, &ret_item, &qid_map) == 0)
 			err(1, "qid map insert");
-		// Skon
-		//printf("pfaltq_store: adding queue: %s\n",item.key);
 
 	}
 }
@@ -199,7 +193,7 @@ pfaltq_lookup(char *ifname, uint8_t index)
 	if ((item.key = malloc(key_size)) == NULL)
 		err(1, "if map key malloc");
 	snprintf(item.key, key_size, "%s:%d",ifname,index);
-	//printf("pfaltq_lookup: %s ",item.key);
+
 	//item.key = ifname;
 	if (hsearch_r(item, FIND, &ret_item, &if_map) == 0) {
 	  //printf("... Fail\n");
@@ -222,7 +216,7 @@ qname_to_pfaltq(const char *qname, const char *ifname, uint8_t index)
 	// Skon add index
 	//snprintf(item.key, sizeof(key), "%s:%s", ifname, qname);
 	snprintf(item.key, sizeof(key), "%s:%d:%s", ifname, index, qname);
-	//printf("qname_to_pfaltq: %s\n",item.key);
+
 	if (hsearch_r(item, FIND, &ret_item, &queue_map) == 0)
 		return (NULL);
 
@@ -1002,11 +996,10 @@ check_commit_hfsc(int dev, int opts, struct pfctl_altq *if_ppa)
 {
 
 	/* check if hfsc has one default queue for this interface */
-        /* Skon - reduce to less  then or equal to 1, must still check */
-        /* At least one across interface queues */
-	if (if_ppa->meta.default_classes > 1) {
-		warnx("should have one default queue on %s", if_ppa->pa.ifname);
-		return (1);
+        /* Exactly one per root interface queues */
+        if (if_ppa->meta.default_classes != 1) {
+            warnx("must have exactly one default queue on %s, queue %s", if_ppa->pa.ifname, if_ppa->pa.ifname);
+            return (1);
 	}
 	return (0);
 }
