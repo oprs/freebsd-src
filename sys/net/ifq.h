@@ -161,7 +161,7 @@ int	if_handoff(struct ifqueue *ifq, struct mbuf *m, struct ifnet *ifp,
 
 void	if_start(struct ifnet *);
 
-// Skon - Must remove locking from here because we don;t yet know which queue to lock
+// Skon - Must remove locking from here because we don't yet know which queue to lock
 #define	IFQ_ENQUEUE(ifq, m, err)					\
 do {									\
 	if (ALTQ_IS_ENABLED(ifq))					\
@@ -256,13 +256,6 @@ do {									\
 #define	IFQ_SET_MAXLEN(ifq, len)	((ifq)->ifq_maxlen = (len))
 
 /*
- * Skon: Added TRYLOCK to test for lock in use during queue rule match on hfsc_enqueue
- * This avoids contention during operation, but allow for protection while the 
- * queue is being detroyed
- */
-#define IFQ_TRYLOCK(ifq)            mtx_trylock(&(ifq)->ifq_mtx)
-
-/*
  * The IFF_DRV_OACTIVE test should really occur in the device driver, not in
  * the handoff logic, as that flag is locked by the device driver.
  */
@@ -270,10 +263,9 @@ do {									\
 do {									\
 	int len;							\
 	short mflags;							\
-	printf("SKON:IFQ_HANDOFF_ADJ");					\
 	len = (m)->m_pkthdr.len;					\
 	mflags = (m)->m_flags;						\
-	IFQ_ENQUEUE((ifp)->if_snd, m, err);				\
+	IFQ_ENQUEUE(&(ifp)->if_snd[0], m, err);				\
 	if ((err) == 0) {						\
 		if_inc_counter((ifp), IFCOUNTER_OBYTES, len + (adj));	\
 		if (mflags & M_MCAST)					\
@@ -301,11 +293,8 @@ do {									\
    }                                                                    \
    (ifql)=&q[maxq];
        
-// Skon: Fix to use the longest queue
-#define	IFQ_DRV_DEQUEUE(ifqIn, m)   				      	\
+#define	IFQ_DRV_DEQUEUE(ifq, m)   				      	\
   do {                                                                  \
-        struct ifaltq *ifq;						\
-        IFQ_LONGEST(ifqIn,ifq)						\
 	(m) = (ifq)->ifq_drv_head;					\
 	if (m) {							\
 		if (((ifq)->ifq_drv_head = (m)->m_nextpkt) == NULL)	\
@@ -336,7 +325,6 @@ do {									\
 // Since we don't know which queue the gcvd
 #define	IFQ_DRV_PREPEND(ifq, m)						\
 do {									\
-        printf("IFQ_DRV_PREPEND\n");  				        \
 	(m)->m_nextpkt = (ifq)->ifq_drv_head;				\
 	if ((ifq)->ifq_drv_tail == NULL)				\
 		(ifq)->ifq_drv_tail = (m);				\
@@ -365,7 +353,6 @@ drbr_enqueue(struct ifnet *ifp, struct buf_ring *br, struct mbuf *m)
 	int error = 0;
 
 #ifdef ALTQ
-	printf("SKON:drbr_enqueue");
 	if (ALTQ_IS_ENABLED(ifp->if_snd)) {
 		IFQ_ENQUEUE(ifp->if_snd, m, error);
 		if (error)
@@ -388,7 +375,6 @@ drbr_putback(struct ifnet *ifp, struct buf_ring *br, struct mbuf *new)
 	 * for this one.
 	 */
 #ifdef ALTQ
-  printf("SKON:drbr_putback/n");
 	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd)) {
 		/* 
 		 * Peek in altq case dequeued it
@@ -406,7 +392,6 @@ drbr_peek(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
   // Skon
-  printf("SKON:drbr_peek\n");
 	struct mbuf *m;
 	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd)) {
 		/* 
@@ -428,7 +413,6 @@ drbr_flush(struct ifnet *ifp, struct buf_ring *br)
 	struct mbuf *m;
 
 #ifdef ALTQ
-	printf("SKON:drbr_flush");
 	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd))
 		IFQ_PURGE(ifp->if_snd);
 #endif	
@@ -449,7 +433,6 @@ drbr_dequeue(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
 	struct mbuf *m;
-	printf("SKON:drbr_dequeue");
 	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd)) {
 		IFQ_DEQUEUE(ifp->if_snd, m);
 		return (m);
@@ -462,7 +445,6 @@ static __inline void
 drbr_advance(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-  printf("SKON:drbr_advance");
 	/* Nothing to do here since peek dequeues in altq case */
 	if (ifp != NULL && ALTQ_IS_ENABLED(ifp->if_snd))
 		return;
@@ -477,7 +459,6 @@ drbr_dequeue_cond(struct ifnet *ifp, struct buf_ring *br,
 {
 	struct mbuf *m;
 #ifdef ALTQ
-	printf("SKON:drbr_dequeue_cond\n");
 	if (ALTQ_IS_ENABLED(ifp->if_snd)) {
 		IFQ_LOCK(ifp->if_snd);
 		IFQ_POLL_NOLOCK(ifp->if_snd, m);
@@ -501,7 +482,6 @@ static __inline int
 drbr_empty(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-  printf("SKON:drbr_empty\n");
 	if (ALTQ_IS_ENABLED(ifp->if_snd))
 		return (IFQ_IS_EMPTY(ifp->if_snd));
 #endif
@@ -512,7 +492,6 @@ static __inline int
 drbr_needs_enqueue(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-  printf("SKON:drbr_needs_enqueue");
 	if (ALTQ_IS_ENABLED(ifp->if_snd))
 		return (1);
 #endif
@@ -523,7 +502,6 @@ static __inline int
 drbr_inuse(struct ifnet *ifp, struct buf_ring *br)
 {
 #ifdef ALTQ
-  printf("SKON:drbr_inuse\n");
 	if (ALTQ_IS_ENABLED(ifp->if_snd))
 		return (ifp->if_snd->ifq_len);
 #endif

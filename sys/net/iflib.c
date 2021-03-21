@@ -4341,7 +4341,7 @@ iflib_altq_if_transmit(if_t ifp, struct mbuf *m)
 	if (ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
 		IFQ_ENQUEUE(&ifp->if_snd[0], m, err);
 		if (err < 0) {
-		  queue_index = -err;
+		  queue_index = -err; // A negative return is the queue 
 		  err=0;
 		}
 		if (err == 0)
