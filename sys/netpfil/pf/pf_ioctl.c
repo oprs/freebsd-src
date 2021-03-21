@@ -571,6 +571,7 @@ tagname2tag(struct pf_tagset *ts, char *tagname)
 		return (0);
 	strlcpy(tag->name, tagname, sizeof(tag->name));
 	tag->tag = new_tagid;
+
 	tag->ref = 1;
 
 	/* Insert into namehash */
