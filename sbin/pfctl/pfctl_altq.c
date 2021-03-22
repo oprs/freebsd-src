@@ -60,8 +60,15 @@ static struct hsearch_data queue_map;
 static struct hsearch_data if_map;
 static struct hsearch_data qid_map;
 
-static struct pfctl_altq *pfaltq_lookup(char *ifname);
-static struct pfctl_altq *qname_to_pfaltq(const char *, const char *);
+// Skon - new function to lookup index from qname
+int  qname_to_index(struct pfctl *pf, char *qname);
+
+// Skon - add index
+static struct pfctl_altq *pfaltq_lookup(char *ifname, uint8_t index);
+//static struct pfctl_altq *pfaltq_lookup(char *ifname);
+
+static struct pfctl_altq *qname_to_pfaltq(const char *, const char *, uint8_t index);
+//static struct pfctl_altq *qname_to_pfaltq(const char *, const char *);
 static u_int32_t	 qname_to_qid(char *);
 
 static int	eval_pfqueue_cbq(struct pfctl *, struct pf_altq *,
@@ -134,56 +141,82 @@ pfaltq_store(struct pf_altq *a)
 	ENTRY 			 item;
 	ENTRY			*ret_item;
 	size_t			 key_size;
-	
+
 	if ((altq = malloc(sizeof(*altq))) == NULL)
 		err(1, "queue malloc");
 	memcpy(&altq->pa, a, sizeof(struct pf_altq));
 	memset(&altq->meta, 0, sizeof(altq->meta));
 
 	if (a->qname[0] == 0) {
-		item.key = altq->pa.ifname;
+		// Skon - include index with ifname
+		key_size = sizeof(a->ifname);
+		if ((item.key = malloc(key_size)) == NULL)
+			err(1, "if map key malloc");
+		snprintf(item.key, key_size, "%s:%d",altq->pa.ifname,altq->pa.altq_index);
+
+	        //item.key = altq->pa.ifname;
 		item.data = altq;
 		if (hsearch_r(item, ENTER, &ret_item, &if_map) == 0)
 			err(1, "interface map insert");
 		STAILQ_INSERT_TAIL(&interfaces, altq, meta.link);
 	} else {
-		key_size = sizeof(a->ifname) + sizeof(a->qname);
+	        // Skon - Add index to ifname
+	        key_size = sizeof(a->ifname) + sizeof(a->qname)+2;
+		//	        key_size = sizeof(a->ifname) + sizeof(a->qname);
+
 		if ((item.key = malloc(key_size)) == NULL)
 			err(1, "queue map key malloc");
-		snprintf(item.key, key_size, "%s:%s", a->ifname, a->qname);
+		// Skon - new key with index
+		snprintf(item.key, key_size, "%s:%d:%s", a->ifname, a->altq_index, a->qname);
+		//snprintf(item.key, key_size, "%s:%s", a->ifname, a->qname);
+
 		item.data = altq;
 		if (hsearch_r(item, ENTER, &ret_item, &queue_map) == 0)
 			err(1, "queue map insert");
 
-		item.key = altq->pa.qname;
+		//item.key = altq->pa.qname;
 		item.data = &altq->pa.qid;
 		if (hsearch_r(item, ENTER, &ret_item, &qid_map) == 0)
 			err(1, "qid map insert");
+
 	}
 }
 
+// Skon - add index
 static struct pfctl_altq *
-pfaltq_lookup(char *ifname)
+pfaltq_lookup(char *ifname, uint8_t index)
 {
 	ENTRY	 item;
 	ENTRY	*ret_item;
+	// Skon - Include index in search key
+	size_t    key_size=sizeof(ifname);
+	if ((item.key = malloc(key_size)) == NULL)
+		err(1, "if map key malloc");
+	snprintf(item.key, key_size, "%s:%d",ifname,index);
 
-	item.key = ifname;
-	if (hsearch_r(item, FIND, &ret_item, &if_map) == 0)
+	//item.key = ifname;
+	if (hsearch_r(item, FIND, &ret_item, &if_map) == 0) {
+	  //printf("... Fail\n");
 		return (NULL);
-
+	}
+	//printf("... Succeed\n");
+	
 	return (ret_item->data);
 }
 
+//  Skon - add index
 static struct pfctl_altq *
-qname_to_pfaltq(const char *qname, const char *ifname)
+qname_to_pfaltq(const char *qname, const char *ifname, uint8_t index)
 {
 	ENTRY	 item;
 	ENTRY	*ret_item;
 	char	 key[IFNAMSIZ + PF_QNAME_SIZE];
 
 	item.key = key;
-	snprintf(item.key, sizeof(key), "%s:%s", ifname, qname);
+	// Skon add index
+	//snprintf(item.key, sizeof(key), "%s:%s", ifname, qname);
+	snprintf(item.key, sizeof(key), "%s:%d:%s", ifname, index, qname);
+
 	if (hsearch_r(item, FIND, &ret_item, &queue_map) == 0)
 		return (NULL);
 
@@ -196,7 +229,7 @@ qname_to_qid(char *qname)
 	ENTRY	 item;
 	ENTRY	*ret_item;
 	uint32_t qid;
-	
+
 	/*
 	 * We guarantee that same named queues on different interfaces
 	 * have the same qid.
@@ -222,8 +255,8 @@ print_altq(const struct pf_altq *a, unsigned int level,
 	if (a->local_flags & PFALTQ_FLAG_IF_REMOVED)
 		printf("INACTIVE ");
 #endif
-
-	printf("altq on %s ", a->ifname);
+	// Skon
+	//printf("altq on %s ", a->ifname);
 
 	switch (a->scheduler) {
 	case ALTQT_CBQ:
@@ -370,7 +403,10 @@ check_commit_altq(int dev, int opts)
 
 	/* call the discipline check for each interface. */
 	STAILQ_FOREACH(if_ppa, &interfaces, meta.link) {
-		switch (if_ppa->pa.scheduler) {
+	  //printf("check_commit_altq: %s:%d", if_ppa->pa.ifname, if_ppa->meta.default_classes);
+
+
+	  switch (if_ppa->pa.scheduler) {
 		case ALTQT_CBQ:
 			error = check_commit_cbq(dev, opts, if_ppa);
 			break;
@@ -387,9 +423,25 @@ check_commit_altq(int dev, int opts)
 			break;
 		}
 	}
+			  
 	return (error);
 }
+// Skon - qname to index. Return -1 if not found
+int qname_to_index(struct pfctl *pf, char *qname) {
+	ENTRY	 item;
+	ENTRY	*ret_item;
+	int index;
+	item.key = qname;
 
+	if (hsearch_r(item, FIND, &ret_item, &pf->queue_name_index_map) == 0) {
+	  printf("Warning - qname_to_index fails to find: %s\n",qname);
+		return (-1);
+	}
+	int *idx_ptr = ret_item->data;
+	index = (int) *idx_ptr;
+	//printf("qname_to_index: %s: Index:%d\n",qname,index);
+	return (index);
+}
 /*
  * eval_pfqueue computes the queue parameters.
  */
@@ -401,24 +453,34 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 	struct pfctl_altq	*if_ppa, *parent;
 	int		 	 error = 0;
 
+	int index= qname_to_index(pf,pa->qname);
+
+	if (index >=0) {
+	  pa->altq_index = (u_int8_t) index;
+	}
 	/* find the corresponding interface and copy fields used by queues */
-	if ((if_ppa = pfaltq_lookup(pa->ifname)) == NULL) {
+	/* Skon - add index */
+	//if ((if_ppa = pfaltq_lookup(pa->ifname)) == NULL) {
+	if ((if_ppa = pfaltq_lookup(pa->ifname,pa->altq_index)) == NULL) {
 		fprintf(stderr, "altq not defined on %s\n", pa->ifname);
 		return (1);
 	}
 	pa->scheduler = if_ppa->pa.scheduler;
 	pa->ifbandwidth = if_ppa->pa.ifbandwidth;
-
-	if (qname_to_pfaltq(pa->qname, pa->ifname) != NULL) {
+	// Skon - include index in lookup
+	//if (qname_to_pfaltq(pa->qname, pa->ifname) != NULL) {
+	if (qname_to_pfaltq(pa->qname, pa->ifname,pa->altq_index) != NULL) {
 		fprintf(stderr, "queue %s already exists on interface %s\n",
 		    pa->qname, pa->ifname);
 		return (1);
 	}
 	pa->qid = qname_to_qid(pa->qname);
 
-	parent = NULL;
+       parent = NULL;
 	if (pa->parent[0] != 0) {
-		parent = qname_to_pfaltq(pa->parent, pa->ifname);
+		// Skon - include index in lookup
+		//parent = qname_to_pfaltq(pa->parent, pa->ifname);
+		parent = qname_to_pfaltq(pa->parent, pa->ifname,pa->altq_index);
 		if (parent == NULL) {
 			fprintf(stderr, "parent %s not found for %s\n",
 			    pa->parent, pa->qname);
@@ -469,7 +531,7 @@ eval_pfqueue(struct pfctl *pf, struct pf_altq *pa, struct node_queue_bw *bw,
 
 	if (parent != NULL)
 		parent->meta.children++;
-	
+
 	switch (pa->scheduler) {
 	case ALTQT_CBQ:
 		error = eval_pfqueue_cbq(pf, pa, if_ppa);
@@ -530,7 +592,7 @@ eval_pfqueue_cbq(struct pfctl *pf, struct pf_altq *pa, struct pfctl_altq *if_ppa
 		if_ppa->meta.root_classes++;
 	if (pa->pq_u.cbq_opts.flags & CBQCLF_DEFCLASS)
 		if_ppa->meta.default_classes++;
-	
+
 	cbq_compute_idletime(pf, pa);
 	return (0);
 }
@@ -778,7 +840,7 @@ eval_pfqueue_hfsc(struct pfctl *pf, struct pf_altq *pa, struct pfctl_altq *if_pp
 
 	if (pa->pq_u.hfsc_opts.flags & HFCF_DEFAULTCLASS)
 		if_ppa->meta.default_classes++;
-	
+
 	/* if link_share is not specified, use bandwidth */
 	if (opts->lssc_m2 == 0)
 		opts->lssc_m2 = pa->bandwidth;
@@ -808,7 +870,7 @@ eval_pfqueue_hfsc(struct pfctl *pf, struct pf_altq *pa, struct pfctl_altq *if_pp
 	 * be smaller than the interface bandwidth, and the upper-limit should
 	 * be larger than the real-time service curve when both are defined.
 	 */
-	
+
 	/* check the real-time service curve.  reserve 20% of interface bw */
 	if (opts->rtsc_m2 != 0) {
 		/* add this queue to the sum */
@@ -934,9 +996,10 @@ check_commit_hfsc(int dev, int opts, struct pfctl_altq *if_ppa)
 {
 
 	/* check if hfsc has one default queue for this interface */
-	if (if_ppa->meta.default_classes != 1) {
-		warnx("should have one default queue on %s", if_ppa->pa.ifname);
-		return (1);
+        /* Exactly one per root interface queues */
+        if (if_ppa->meta.default_classes != 1) {
+            warnx("must have exactly one default queue on %s, queue %s", if_ppa->pa.ifname, if_ppa->pa.ifname);
+            return (1);
 	}
 	return (0);
 }
@@ -1267,7 +1330,7 @@ getifspeed(int pfdev, char *ifname)
 
 	bzero(&io, sizeof io);
 	if (strlcpy(io.ifname, ifname, IFNAMSIZ) >=
-	    sizeof(io.ifname)) 
+	    sizeof(io.ifname))
 		errx(1, "getifspeed: strlcpy");
 	if (ioctl(pfdev, DIOCGIFSPEED, &io) == -1)
 		err(1, "DIOCGIFSPEED");

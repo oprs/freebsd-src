@@ -1057,9 +1057,9 @@ vlan_clone_create(struct if_clone *ifc, char *name, size_t len, caddr_t params)
 #ifdef ALTQ
 	ifp->if_start = vlan_altq_start;
 	ifp->if_transmit = vlan_altq_transmit;
-	IFQ_SET_MAXLEN(&ifp->if_snd, ifqmaxlen);
-	ifp->if_snd.ifq_drv_maxlen = 0;
-	IFQ_SET_READY(&ifp->if_snd);
+	IFQ_SET_MAXLEN(&ifp->if_snd[0], ifqmaxlen);
+	ifp->if_snd[0].ifq_drv_maxlen = 0;
+	IFQ_SET_READY(&ifp->if_snd[0]);
 #else
 	ifp->if_transmit = vlan_transmit;
 #endif
@@ -1106,7 +1106,7 @@ vlan_clone_destroy(struct if_clone *ifc, struct ifnet *ifp)
 	struct ifvlan *ifv = ifp->if_softc;
 
 #ifdef ALTQ
-	IFQ_PURGE(&ifp->if_snd);
+	IFQ_PURGE(&ifp->if_snd[0]);
 #endif
 	ether_ifdetach(ifp);	/* first, remove it from system-wide lists */
 	vlan_unconfig(ifp);	/* now it can be unconfigured and freed */
@@ -1191,7 +1191,7 @@ vlan_transmit(struct ifnet *ifp, struct mbuf *m)
 static void
 vlan_altq_start(struct ifnet *ifp)
 {
-	struct ifaltq *ifq = &ifp->if_snd;
+	struct ifaltq *ifq = &ifp->if_snd[0];
 	struct mbuf *m;
 
 	IFQ_LOCK(ifq);
@@ -1208,8 +1208,8 @@ vlan_altq_transmit(struct ifnet *ifp, struct mbuf *m)
 {
 	int err;
 
-	if (ALTQ_IS_ENABLED(&ifp->if_snd)) {
-		IFQ_ENQUEUE(&ifp->if_snd, m, err);
+	if (ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
+		IFQ_ENQUEUE(&ifp->if_snd[0], m, err);
 		if (err == 0)
 			vlan_altq_start(ifp);
 	} else

@@ -2366,6 +2366,7 @@ pf_send_tcp(struct mbuf *replyto, const struct pf_rule *r, sa_family_t af,
 	struct pf_send_entry *pfse;
 	struct mbuf	*m;
 	int		 len, tlen;
+	printf("$");
 #ifdef INET
 	struct ip	*h = NULL;
 #endif /* INET */
@@ -2375,7 +2376,6 @@ pf_send_tcp(struct mbuf *replyto, const struct pf_rule *r, sa_family_t af,
 	struct tcphdr	*th;
 	char		*opt;
 	struct pf_mtag  *pf_mtag;
-
 	len = 0;
 	th = NULL;
 
@@ -2426,7 +2426,6 @@ pf_send_tcp(struct mbuf *replyto, const struct pf_rule *r, sa_family_t af,
 #ifdef ALTQ
 	if (r != NULL && r->qid) {
 		pf_mtag->qid = r->qid;
-
 		/* add hints for ecn */
 		pf_mtag->hdr = mtod(m, struct ip *);
 	}
@@ -6157,10 +6156,12 @@ done:
 		} else {
 			if (s != NULL)
 				pd.pf_mtag->qid_hash = pf_state_hash(s);
-			if (pqid || (pd.tos & IPTOS_LOWDELAY))
+			if (pqid || (pd.tos & IPTOS_LOWDELAY)) {
 				pd.pf_mtag->qid = r->pqid;
-			else
+			} else {
 				pd.pf_mtag->qid = r->qid;
+			}
+		
 			/* Add hints for ecn. */
 			pd.pf_mtag->hdr = h;
 		}
@@ -6604,6 +6605,7 @@ done:
 				pd.pf_mtag->qid = r->pqid;
 			else
 				pd.pf_mtag->qid = r->qid;
+			
 			/* Add hints for ecn. */
 			pd.pf_mtag->hdr = h;
 		}

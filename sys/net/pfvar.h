@@ -602,6 +602,7 @@ struct pf_rule {
 	uint64_t		 u_states_cur;
 	uint64_t		 u_states_tot;
 	uint64_t		 u_src_nodes;
+        u_int8_t                 altq_index; // Skon - for multiqueue
 };
 
 /* rule flags */

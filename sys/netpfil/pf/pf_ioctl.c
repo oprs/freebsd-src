@@ -164,6 +164,11 @@ SYSCTL_UINT(_net_pf, OID_AUTO, queue_tag_hashsize, CTLFLAG_RDTUN,
     &pf_queue_tag_hashsize, PF_QUEUE_TAG_HASH_SIZE_DEFAULT,
     "Size of pf(4) queue tag hashtable");
 #endif
+
+VNET_DEFINE(u_int8_t, qid_to_idx[TAGID_MAX]); // Skon - Index mapping
+#define V_qid_to_idx VNET(qid_to_idx)
+
+
 VNET_DEFINE(uma_zone_t,	 pf_tag_z);
 #define	V_pf_tag_z		 VNET(pf_tag_z)
 static MALLOC_DEFINE(M_PFALTQ, "pf_altq", "pf(4) altq configuration db");
@@ -472,7 +477,7 @@ pf_init_tagset(struct pf_tagset *ts, unsigned int *tunable_size,
 {
 	unsigned int i;
 	unsigned int hashsize;
-	
+
 	if (*tunable_size == 0 || !powerof2(*tunable_size))
 		*tunable_size = default_size;
 
@@ -559,7 +564,7 @@ tagname2tag(struct pf_tagset *ts, char *tagname)
 
 	/* Mark the tag as in use.  Bits are 0-based for BIT_CLR() */
 	BIT_CLR(TAGID_MAX, new_tagid - 1, &ts->avail);
-	
+
 	/* allocate and fill new struct pf_tagname */
 	tag = uma_zalloc(V_pf_tag_z, M_NOWAIT);
 	if (tag == NULL)
@@ -574,7 +579,7 @@ tagname2tag(struct pf_tagset *ts, char *tagname)
 	/* Insert into taghash */
 	index = tag2hashindex(ts, new_tagid);
 	TAILQ_INSERT_TAIL(&ts->taghash[index], tag, taghash_entries);
-	
+
 	return (tag->tag);
 }
 
@@ -583,7 +588,7 @@ tag_unref(struct pf_tagset *ts, u_int16_t tag)
 {
 	struct pf_tagname	*t;
 	uint16_t		 index;
-	
+
 	PF_RULES_WASSERT();
 
 	index = tag2hashindex(ts, tag);
@@ -613,7 +618,7 @@ pf_tagname2tag(char *tagname)
 static u_int32_t
 pf_qname2qid(char *qname)
 {
-	return ((u_int32_t)tagname2tag(&V_pf_qids, qname));
+  return ((u_int32_t)tagname2tag(&V_pf_qids, qname));
 }
 
 static void
@@ -705,8 +710,9 @@ pf_commit_altq(u_int32_t ticket)
 		if ((altq->local_flags & PFALTQ_FLAG_IF_REMOVED) == 0) {
 			/* attach the discipline */
 			error = altq_pfattach(altq);
-			if (error == 0 && V_pf_altq_running)
-				error = pf_enable_altq(altq);
+			if (error == 0 && V_pf_altq_running) {
+			  error = pf_enable_altq(altq);
+			}
 			if (error != 0)
 				return (error);
 		}
@@ -744,18 +750,21 @@ pf_enable_altq(struct pf_altq *altq)
 	struct ifnet		*ifp;
 	struct tb_profile	 tb;
 	int			 error = 0;
+	uint8_t index = altq->altq_index;
 
 	if ((ifp = ifunit(altq->ifname)) == NULL)
 		return (EINVAL);
 
-	if (ifp->if_snd.altq_type != ALTQT_NONE)
-		error = altq_enable(&ifp->if_snd);
+	if (ifp->if_snd[index].altq_type != ALTQT_NONE) {
+	  //printf("pf_enable_altq: %s %d\n",altq->ifname, index); 
+	  error = altq_enable(&ifp->if_snd[index]);
 
+	}
 	/* set tokenbucket regulator */
-	if (error == 0 && ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd)) {
+	if (error == 0 && ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd[index])) {
 		tb.rate = altq->ifbandwidth;
 		tb.depth = altq->tbrsize;
-		error = tbr_set(&ifp->if_snd, &tb);
+		error = tbr_set(&ifp->if_snd[index], &tb);
 	}
 
 	return (error);
@@ -767,6 +776,7 @@ pf_disable_altq(struct pf_altq *altq)
 	struct ifnet		*ifp;
 	struct tb_profile	 tb;
 	int			 error;
+	int i = altq->altq_index;
 
 	if ((ifp = ifunit(altq->ifname)) == NULL)
 		return (EINVAL);
@@ -775,15 +785,15 @@ pf_disable_altq(struct pf_altq *altq)
 	 * when the discipline is no longer referenced, it was overridden
 	 * by a new one.  if so, just return.
 	 */
-	if (altq->altq_disc != ifp->if_snd.altq_disc)
+	if (altq->altq_disc != ifp->if_snd[i].altq_disc)
 		return (0);
 
-	error = altq_disable(&ifp->if_snd);
+	error = altq_disable(&ifp->if_snd[i]);
 
 	if (error == 0) {
 		/* clear tokenbucket regulator */
 		tb.rate = 0;
-		error = tbr_set(&ifp->if_snd, &tb);
+		error = tbr_set(&ifp->if_snd[i], &tb);
 	}
 
 	return (error);
@@ -795,7 +805,7 @@ pf_altq_ifnet_event_add(struct ifnet *ifp, int remove, u_int32_t ticket,
 {
 	struct ifnet	*ifp1;
 	int		 error = 0;
-	
+
 	/* Deactivate the interface in question */
 	altq->local_flags &= ~PFALTQ_FLAG_IF_REMOVED;
 	if ((ifp1 = ifunit(altq->ifname)) == NULL ||
@@ -826,7 +836,7 @@ pf_altq_ifnet_event(struct ifnet *ifp, int remove)
 	 * that do not support ALTQ, as it's not possible for such
 	 * interfaces to be part of the configuration.
 	 */
-	if (!ALTQ_IS_READY(&ifp->if_snd))
+	if (!ALTQ_IS_READY(&ifp->if_snd[0]))
 		return;
 
 	/* Interrupt userland queue modifications */
@@ -861,7 +871,8 @@ pf_altq_ifnet_event(struct ifnet *ifp, int remove)
 			break;
 		}
 		bcopy(a1, a2, sizeof(struct pf_altq));
-
+		// Skon
+		//printf("Event: %s:%d\n",a2->qname,a2->altq_index);
 		if ((a2->qid = pf_qname2qid(a2->qname)) == 0) {
 			error = EBUSY;
 			free(a2, M_PFALTQ);
@@ -1155,7 +1166,7 @@ static int
 pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 {
 	u_int32_t version;
-	
+
 	if (ioc_size == sizeof(struct pfioc_altq_v0))
 		version = 0;
 	else
@@ -1196,7 +1207,7 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 #define ASSIGN_OPT(x) exported_q->pq_u.hfsc_opts.x = q->pq_u.hfsc_opts.x
 #define ASSIGN_OPT_SATU32(x) exported_q->pq_u.hfsc_opts.x = \
 			    SATU32(q->pq_u.hfsc_opts.x)
-			
+
 			ASSIGN_OPT_SATU32(rtsc_m1);
 			ASSIGN_OPT(rtsc_d);
 			ASSIGN_OPT_SATU32(rtsc_m2);
@@ -1210,13 +1221,14 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 			ASSIGN_OPT_SATU32(ulsc_m2);
 
 			ASSIGN_OPT(flags);
-			
+
 #undef ASSIGN_OPT
 #undef ASSIGN_OPT_SATU32
 		} else
 			COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	case 1:	{
@@ -1241,6 +1253,7 @@ pf_export_kaltq(struct pf_altq *q, struct pfioc_altq_v1 *pa, size_t ioc_size)
 		COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	default:
@@ -1264,7 +1277,7 @@ static int
 pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 {
 	u_int32_t version;
-	
+
 	if (ioc_size == sizeof(struct pfioc_altq_v0))
 		version = 0;
 	else
@@ -1272,7 +1285,7 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 
 	if (version > PFIOC_ALTQ_VERSION)
 		return (EINVAL);
-	
+
 #define ASSIGN(x) q->x = imported_q->x
 #define COPY(x) \
 	bcopy(&imported_q->x, &q->x, min(sizeof(imported_q->x), sizeof(q->x)))
@@ -1318,12 +1331,13 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 			ASSIGN_OPT(ulsc_m2);
 
 			ASSIGN_OPT(flags);
-			
+
 #undef ASSIGN_OPT
 		} else
 			COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
 	case 1: {
@@ -1348,16 +1362,17 @@ pf_import_kaltq(struct pfioc_altq_v1 *pa, struct pf_altq *q, size_t ioc_size)
 		COPY(pq_u);
 
 		ASSIGN(qid);
+		ASSIGN(altq_index);
 		break;
 	}
-	default:	
+	default:
 		panic("%s: unhandled struct pfioc_altq version", __func__);
 		break;
 	}
 
 #undef ASSIGN
 #undef COPY
-	
+
 	return (0);
 }
 
@@ -1389,7 +1404,6 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 {
 	int			 error = 0;
 	PF_RULES_RLOCK_TRACKER;
-
 	/* XXX keep in sync with switch() below */
 	if (securelevel_gt(td->td_ucred, 2))
 		switch (cmd) {
@@ -1505,7 +1519,8 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 
 	switch (cmd) {
 	case DIOCSTART:
-		sx_xlock(&pf_ioctl_lock);
+
+	        sx_xlock(&pf_ioctl_lock);
 		if (V_pf_status.running)
 			error = EEXIST;
 		else {
@@ -1626,14 +1641,16 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 #ifdef ALTQ
 		/* set queue IDs */
 		if (rule->qname[0] != 0) {
-			if ((rule->qid = pf_qname2qid(rule->qname)) == 0)
+		  if ((rule->qid = pf_qname2qid(rule->qname)) == 0) {
 				error = EBUSY;
-			else if (rule->pqname[0] != 0) {
+		  } else if (rule->pqname[0] != 0) {
 				if ((rule->pqid =
-				    pf_qname2qid(rule->pqname)) == 0)
+				     pf_qname2qid(rule->pqname)) == 0)
 					error = EBUSY;
-			} else
+		  } else {
 				rule->pqid = rule->qid;
+		  }
+	     
 		}
 #endif
 		if (rule->tagname[0])
@@ -1701,6 +1718,8 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 
 #undef ERROUT
 DIOCADDRULE_error:
+
+		printf("DIOCADDRULE_error\n");
 		PF_RULES_WUNLOCK();
 		counter_u64_free(rule->states_cur);
 		counter_u64_free(rule->states_tot);
@@ -1886,14 +1905,16 @@ DIOCADDRULE_error:
 			/* set queue IDs */
 			if (newrule->qname[0] != 0) {
 				if ((newrule->qid =
-				    pf_qname2qid(newrule->qname)) == 0)
+				     pf_qname2qid(newrule->qname)) == 0)
 					error = EBUSY;
 				else if (newrule->pqname[0] != 0) {
 					if ((newrule->pqid =
-					    pf_qname2qid(newrule->pqname)) == 0)
+					     pf_qname2qid(newrule->pqname)) == 0)
 						error = EBUSY;
-				} else
+				} else {
 					newrule->pqid = newrule->qid;
+				}
+	      
 			}
 #endif /* ALTQ */
 			if (newrule->tagname[0])
@@ -2131,6 +2152,7 @@ relock_DIOCKILLSTATES:
 	}
 
 	case DIOCADDSTATE: {
+
 		struct pfioc_state	*ps = (struct pfioc_state *)addr;
 		struct pfsync_state	*sp = &ps->state;
 
@@ -2437,7 +2459,7 @@ DIOCGETSTATES_full:
 		PF_RULES_WLOCK();
 		/* enable all altq interfaces on active list */
 		TAILQ_FOREACH(altq, V_pf_altq_ifs_active, entries) {
-			if ((altq->local_flags & PFALTQ_FLAG_IF_REMOVED) == 0) {
+		        if ((altq->local_flags & PFALTQ_FLAG_IF_REMOVED) == 0) {
 				error = pf_enable_altq(altq);
 				if (error != 0)
 					break;
@@ -2477,8 +2499,10 @@ DIOCGETSTATES_full:
 
 		altq = malloc(sizeof(*altq), M_PFALTQ, M_WAITOK | M_ZERO);
 		error = pf_import_kaltq(pa, altq, IOCPARM_LEN(cmd));
+
 		if (error)
 			break;
+		//printf("DIOCADDALTQV1: %d\n",altq->altq_index);
 		altq->local_flags = 0;
 
 		PF_RULES_WLOCK();
@@ -2494,22 +2518,27 @@ DIOCGETSTATES_full:
 		 * copy the necessary fields
 		 */
 		if (altq->qname[0] != 0) {
-			if ((altq->qid = pf_qname2qid(altq->qname)) == 0) {
+		  if ((altq->qid = pf_qname2qid(altq->qname)) == 0) {
 				PF_RULES_WUNLOCK();
 				error = EBUSY;
 				free(altq, M_PFALTQ);
 				break;
-			}
+		        }
 			altq->altq_disc = NULL;
 			TAILQ_FOREACH(a, V_pf_altq_ifs_inactive, entries) {
-				if (strncmp(a->ifname, altq->ifname,
-				    IFNAMSIZ) == 0) {
+				//if (strncmp(a->ifname, altq->ifname,
+				//  IFNAMSIZ) == 0) {
+				// Skon: change to look at BOTH interface and index
+				if (strncmp(a->ifname, altq->ifname, IFNAMSIZ) == 0 &&
+				    a->altq_index == altq->altq_index) {
 					altq->altq_disc = a->altq_disc;
+					// Skon: Save index in index map
+					V_qid_to_idx[altq->qid]=altq->altq_index;
+					printf("Add Queue: %s:%s QID: %d Index: %d\n",altq->ifname,altq->qname,altq->qid,altq->altq_index);
 					break;
 				}
 			}
 		}
-
 		if ((ifp = ifunit(altq->ifname)) == NULL)
 			altq->local_flags |= PFALTQ_FLAG_IF_REMOVED;
 		else
@@ -2590,6 +2619,7 @@ DIOCGETSTATES_full:
 		}
 		nbytes = pq->nbytes;
 		altq = pf_altq_get_nth_active(pq->nr);
+
 		if (altq == NULL) {
 			PF_RULES_RUNLOCK();
 			error = EBUSY;
@@ -2606,7 +2636,9 @@ DIOCGETSTATES_full:
 			version = 0;  /* DIOCGETQSTATSV0 means stats struct v0 */
 		else
 			version = pq->version;
+
 		error = altq_getqstats(altq, pq->buf, &nbytes, version);
+
 		if (error == 0) {
 			pq->scheduler = altq->scheduler;
 			pq->nbytes = nbytes;
@@ -3914,7 +3946,9 @@ DIOCCHANGEADDR_error:
 	}
 
 	default:
-		error = ENODEV;
+	  printf("Default\n");
+
+	        error = ENODEV;
 		break;
 	}
 fail:
@@ -4472,7 +4506,7 @@ vnet_pf_init(void *unused __unused)
 
 	pf_load_vnet();
 }
-VNET_SYSINIT(vnet_pf_init, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD, 
+VNET_SYSINIT(vnet_pf_init, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD,
     vnet_pf_init, NULL);
 
 static void
@@ -4480,7 +4514,7 @@ vnet_pf_uninit(const void *unused __unused)
 {
 
 	pf_unload_vnet();
-} 
+}
 SYSUNINIT(pf_unload, SI_SUB_PROTO_FIREWALL, SI_ORDER_SECOND, pf_unload, NULL);
 VNET_SYSUNINIT(vnet_pf_uninit, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD,
     vnet_pf_uninit, NULL);
