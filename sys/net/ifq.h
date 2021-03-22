@@ -295,7 +295,6 @@ do {									\
        
 #define	IFQ_DRV_DEQUEUE(ifq, m)   				      	\
   do {                                                                  \
-        struct ifaltq *ifq;						\
 	(m) = (ifq)->ifq_drv_head;					\
 	if (m) {							\
 		if (((ifq)->ifq_drv_head = (m)->m_nextpkt) == NULL)	\
