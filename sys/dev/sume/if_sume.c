@@ -1020,7 +1020,7 @@ sume_if_start_locked(struct ifnet *ifp)
 	KASSERT(send->state == SUME_RIFFA_CHAN_STATE_IDLE,
 	    ("SUME not in IDLE state"));
 
-	IFQ_DEQUEUE(&ifp->if_snd, m);
+	IFQ_DEQUEUE(&ifp->if_snd[0], m);
 	if (m == NULL)
 		return (EINVAL);
 

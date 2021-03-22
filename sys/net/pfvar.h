@@ -410,6 +410,8 @@ struct pf_krule {
 		struct pf_addr		addr;
 		u_int16_t		port;
 	}			divert;
+
+	u_int8_t		altq_index; // Skon - for multiqueue
 };
 
 struct pf_ksrc_node {

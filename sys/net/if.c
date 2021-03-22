@@ -237,7 +237,7 @@ int	(*carp_master_p)(struct ifaddr *);
 int	(*carp_forus_p)(struct ifnet *ifp, u_char *dhost);
 int	(*carp_output_p)(struct ifnet *ifp, struct mbuf *m,
     const struct sockaddr *sa);
-int	(*carp_ioctl_p)(struct ifreq *, u_long, struct thread *);   
+int	(*carp_ioctl_p)(struct ifreq *, u_long, struct thread *);
 int	(*carp_attach_p)(struct ifaddr *, int);
 void	(*carp_detach_p)(struct ifaddr *, bool);
 #endif
@@ -641,8 +641,10 @@ if_alloc_domain(u_char type, int numa_domain)
 #ifdef MAC
 	mac_ifnet_init(ifp);
 #endif
-	ifq_init(&ifp->if_snd, ifp);
-
+	// Skon - init all instances of altq
+	for (int i = 0; i < MAXQ; i++) {
+		ifq_init(&ifp->if_snd[i], ifp);
+	}
 	refcount_init(&ifp->if_refcount, 1);	/* Index reference. */
 	for (int i = 0; i < IFCOUNTERS; i++)
 		ifp->if_counters[i] = counter_u64_alloc(M_WAITOK);
@@ -689,7 +691,11 @@ if_free_internal(struct ifnet *ifp)
 #endif /* MAC */
 	IF_AFDATA_DESTROY(ifp);
 	IF_ADDR_LOCK_DESTROY(ifp);
-	ifq_delete(&ifp->if_snd);
+	// Skon - delete them all
+	for (int i = 0; i < MAXQ; i++) {
+	  if (ALTQ_IS_ENABLED(&ifp->if_snd[i]) && ALTQ_IS_INUSE(&ifp->if_snd[i]))
+			ifq_delete(&ifp->if_snd[i]);
+	}
 
 	for (int i = 0; i < IFCOUNTERS; i++)
 		counter_u64_free(ifp->if_counters[i]);
@@ -758,7 +764,7 @@ ifq_init(struct ifaltq *ifq, struct ifnet *ifp)
 
 	mtx_init(&ifq->ifq_mtx, ifp->if_xname, "if send queue", MTX_DEF);
 
-	if (ifq->ifq_maxlen == 0) 
+	if (ifq->ifq_maxlen == 0)
 		ifq->ifq_maxlen = ifqmaxlen;
 
 	ifq->altq_type = 0;
@@ -766,6 +772,8 @@ ifq_init(struct ifaltq *ifq, struct ifnet *ifp)
 	ifq->altq_flags &= ALTQF_CANTCHANGE;
 	ifq->altq_tbr  = NULL;
 	ifq->altq_ifp  = ifp;
+	// Skon - start not inuse
+        ALTQ_CLEAR_INUSE(ifq);
 }
 
 void
@@ -1217,10 +1225,16 @@ if_detach_internal(struct ifnet *ifp, int vmove, struct if_clone **ifcp)
 	 * Remove routes and flush queues.
 	 */
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd))
-		altq_disable(&ifp->if_snd);
-	if (ALTQ_IS_ATTACHED(&ifp->if_snd))
-		altq_detach(&ifp->if_snd);
+	// Skon - do for all inuse queue
+	for (int i = 0; i < MAXQ; i++) {
+		if (ALTQ_IS_ENABLED(&ifp->if_snd[i])
+		    && ALTQ_IS_INUSE(&ifp->if_snd[i]))
+			altq_disable(&ifp->if_snd[i]);
+		if (ALTQ_IS_ATTACHED(&ifp->if_snd[i])
+		    && ALTQ_IS_INUSE(&ifp->if_snd[i]))
+			altq_detach(&ifp->if_snd[i]);
+		ALTQ_CLEAR_INUSE(&ifp->if_snd[i]);
+	}
 #endif
 
 	if_purgeaddrs(ifp);
@@ -2036,7 +2050,7 @@ ifa_ifwithnet(const struct sockaddr *addr, int ignore_ptp, int fibnum)
 
 			if (ifa->ifa_addr->sa_family != af)
 next:				continue;
-			if (af == AF_INET && 
+			if (af == AF_INET &&
 			    ifp->if_flags & IFF_POINTOPOINT && !ignore_ptp) {
 				/*
 				 * This is a bit broken as it doesn't
@@ -2332,21 +2346,29 @@ if_qflush(struct ifnet *ifp)
 	struct mbuf *m, *n;
 	struct ifaltq *ifq;
 
-	ifq = &ifp->if_snd;
-	IFQ_LOCK(ifq);
+	// Skon - do for all queue
+
+	for (int i = 0; i<MAXQ ; i++) {
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]))
+	    ifq = &ifp->if_snd[i];
+	  else
+	    continue;
+
+		IFQ_LOCK(ifq);
 #ifdef ALTQ
-	if (ALTQ_IS_ENABLED(ifq))
-		ALTQ_PURGE(ifq);
+		if (ALTQ_IS_ENABLED(ifq) && ALTQ_IS_INUSE(ifq))
+			ALTQ_PURGE(ifq);
 #endif
-	n = ifq->ifq_head;
-	while ((m = n) != NULL) {
-		n = m->m_nextpkt;
-		m_freem(m);
+		n = ifq->ifq_head;
+		while ((m = n) != NULL) {
+			n = m->m_nextpkt;
+			m_freem(m);
+		}
+		ifq->ifq_head = 0;
+		ifq->ifq_tail = 0;
+		ifq->ifq_len = 0;
+		IFQ_UNLOCK(ifq);
 	}
-	ifq->ifq_head = 0;
-	ifq->ifq_tail = 0;
-	ifq->ifq_len = 0;
-	IFQ_UNLOCK(ifq);
 }
 
 /*
@@ -2381,6 +2403,25 @@ ifunit(const char *name)
 	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 		if (strncmp(name, ifp->if_xname, IFNAMSIZ) == 0)
 			break;
+	}
+	NET_EPOCH_EXIT(et);
+	return (ifp);
+}
+
+// Skon - special ifunit that uses queue struture index for lookups
+struct ifnet *
+ifunit_indexed(const char *name, const uint8_t index)
+{
+	struct epoch_tracker et;
+	struct ifnet *ifp;
+
+	printf("ifunit_indexed: %s, %d\n",name,index);
+	NET_EPOCH_ENTER(et);
+	CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link) {
+		printf("ifunit_indexed: %s, %d\n",ifp->if_xname, ifp->if_snd[0].altq_index);
+		if (strncmp(name, ifp->if_xname, IFNAMSIZ) == 0
+			&& ifp->if_snd[0].altq_index==index)
+		break;
 	}
 	NET_EPOCH_EXIT(et);
 	return (ifp);
@@ -2670,7 +2711,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		 * changes (renames, vmoves, if_attach, etc).
 		 */
 		ifp->if_flags |= IFF_RENAMING;
-		
+
 		/* Announce the departure of the interface. */
 		rt_ifannouncemsg(ifp, IFAN_DEPARTURE);
 		EVENTHANDLER_INVOKE(ifnet_departure_event, ifp);
@@ -3969,7 +4010,7 @@ if_start(struct ifnet *ifp)
 }
 
 /*
- * Backwards compatibility interface for drivers 
+ * Backwards compatibility interface for drivers
  * that have not implemented it
  */
 static int
@@ -4079,17 +4120,17 @@ if_getcapabilities(if_t ifp)
 	return ((struct ifnet *)ifp)->if_capabilities;
 }
 
-int 
+int
 if_setcapenable(if_t ifp, int capabilities)
 {
 	((struct ifnet *)ifp)->if_capenable = capabilities;
 	return (0);
 }
 
-int 
+int
 if_setcapenablebit(if_t ifp, int setcap, int clearcap)
 {
-	if(setcap) 
+	if(setcap)
 		((struct ifnet *)ifp)->if_capenable |= setcap;
 	if(clearcap)
 		((struct ifnet *)ifp)->if_capenable &= ~clearcap;
@@ -4103,7 +4144,7 @@ if_getdname(if_t ifp)
 	return ((struct ifnet *)ifp)->if_dname;
 }
 
-int 
+int
 if_togglecapenable(if_t ifp, int togglecap)
 {
 	((struct ifnet *)ifp)->if_capenable ^= togglecap;
@@ -4324,7 +4365,7 @@ if_getsoftc(if_t ifp)
 	return ((struct ifnet *)ifp)->if_softc;
 }
 
-void 
+void
 if_setrcvif(struct mbuf *m, if_t ifp)
 {
 
@@ -4332,10 +4373,10 @@ if_setrcvif(struct mbuf *m, if_t ifp)
 	m->m_pkthdr.rcvif = (struct ifnet *)ifp;
 }
 
-void 
+void
 if_setvtag(struct mbuf *m, uint16_t tag)
 {
-	m->m_pkthdr.ether_vtag = tag;	
+	m->m_pkthdr.ether_vtag = tag;
 }
 
 uint16_t
@@ -4348,7 +4389,12 @@ if_getvtag(struct mbuf *m)
 int
 if_sendq_empty(if_t ifp)
 {
-	return IFQ_DRV_IS_EMPTY(&((struct ifnet *)ifp)->if_snd);
+	int r = 0;
+	for (int i = 0; i < MAXQ; i++)
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i]))
+		r = r && IFQ_DRV_IS_EMPTY(&((struct ifnet *)ifp)->if_snd[i]);
+
+	return r;
 }
 
 struct ifaddr *
@@ -4363,19 +4409,28 @@ if_getamcount(if_t ifp)
 	return ((struct ifnet *)ifp)->if_amcount;
 }
 
+// Skon - set all queues ready
 int
 if_setsendqready(if_t ifp)
 {
-	IFQ_SET_READY(&((struct ifnet *)ifp)->if_snd);
+	for (int i = 0; i < MAXQ; i++) {
+	  printf("if_setsendqready: %d ",i);
+	  if(ALTQ_IS_INUSE(&((struct ifnet *)ifp)->if_snd[i]))
+	    printf("I");
+		IFQ_SET_READY(&((struct ifnet *)ifp)->if_snd[i]);
+	}
 	return (0);
 }
 
 int
 if_setsendqlen(if_t ifp, int tx_desc_count)
 {
-	IFQ_SET_MAXLEN(&((struct ifnet *)ifp)->if_snd, tx_desc_count);
-	((struct ifnet *)ifp)->if_snd.ifq_drv_maxlen = tx_desc_count;
-
+	for (int i = 0; i < MAXQ; i++) {
+	  if(ALTQ_IS_INUSE(&ifp->if_snd[i])) {
+			IFQ_SET_MAXLEN(&((struct ifnet *)ifp)->if_snd[i], tx_desc_count);
+			((struct ifnet *)ifp)->if_snd[i].ifq_drv_maxlen = tx_desc_count;
+	  }
+	}
 	return (0);
 }
 
@@ -4396,8 +4451,9 @@ if_input(if_t ifp, struct mbuf* sendmp)
 struct mbuf *
 if_dequeue(if_t ifp)
 {
+	// Skon - make it look for longest queue?
 	struct mbuf *m;
-	IFQ_DRV_DEQUEUE(&((struct ifnet *)ifp)->if_snd, m);
+	IFQ_DRV_DEQUEUE(&((struct ifnet *)ifp)->if_snd[0], m);
 
 	return (m);
 }
@@ -4405,7 +4461,8 @@ if_dequeue(if_t ifp)
 int
 if_sendq_prepend(if_t ifp, struct mbuf *m)
 {
-	IFQ_DRV_PREPEND(&((struct ifnet *)ifp)->if_snd, m);
+	// Skon - need to add index
+	IFQ_DRV_PREPEND(&((struct ifnet *)ifp)->if_snd[0], m);
 	return (0);
 }
 

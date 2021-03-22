@@ -71,6 +71,12 @@
 #include <net/altq/altq.h>
 #include <net/altq/altq_hfsc.h>
 
+#include <sys/libkern.h>
+#define TAGID_MAX        50000
+VNET_DECLARE(u_int8_t, qid_to_idx[TAGID_MAX]); // Skon - Index mapping          
+#define V_qid_to_idx VNET(qid_to_idx)
+
+
 /*
  * function prototypes
  */
@@ -146,11 +152,12 @@ hfsc_pfattach(struct pf_altq *a)
 	struct ifnet *ifp;
 	int s, error;
 
+	//printf("hfsc_pfattach: index: %d\n",a->altq_index);
 	if ((ifp = ifunit(a->ifname)) == NULL || a->altq_disc == NULL)
 		return (EINVAL);
 	s = splnet();
-	error = altq_attach(&ifp->if_snd, ALTQT_HFSC, a->altq_disc,
-	    hfsc_enqueue, hfsc_dequeue, hfsc_request, NULL, NULL);
+	error = altq_attach(&ifp->if_snd[a->altq_index], ALTQT_HFSC, a->altq_disc,
+			    hfsc_enqueue, hfsc_dequeue, hfsc_request, NULL, NULL,a->altq_index);
 	splx(s);
 	return (error);
 }
@@ -159,22 +166,41 @@ int
 hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 {
 	struct hfsc_if *hif;
+	struct hfsc_class_slot *hcs;
+	int i;
 
-	if (ifp == NULL)
-		return (EINVAL);
-	if (!ALTQ_IS_READY(&ifp->if_snd))
-		return (ENODEV);
+	if (ifp == NULL) {
+	  printf("EINVAL\n");
+	  return (EINVAL);
+	}
+
+	  if (!ALTQ_IS_READY(&ifp->if_snd[a->altq_index])) {
+	    printf("ENODEV\n");
+	    return (ENODEV);
+	  }
 
 	hif = malloc(sizeof(struct hfsc_if), M_DEVBUF, M_NOWAIT | M_ZERO);
 	if (hif == NULL)
 		return (ENOMEM);
 
+	for (i = 0; i < HFSC_CLASS_SLOTS; i++) {
+		hcs = &hif->hif_class_map[i];
+		TAILQ_INIT(&hcs->hcs_head);
+	}
+
 	TAILQ_INIT(&hif->hif_eligible);
-	hif->hif_ifq = &ifp->if_snd;
+	hif->hif_ifq = &ifp->if_snd[a->altq_index];
 
 	/* keep the state in pf_altq */
 	a->altq_disc = hif;
+	ALTQ_SET_INUSE(&ifp->if_snd[a->altq_index]);
 
+	// Skon
+	//printf("Add hfsc_if Intf: %s, idx: %d, qn: %s hfsc addr: %p\n", a->ifname, a->altq_index, a->qname, (void *)hif);
+	// Skon - add the root index to the ifaltq
+	ifp->if_snd[a->altq_index].altq_index=a->altq_index;
+	ifp->if_snd[a->altq_index].altq_sample_time=read_machclk()/machclk_freq;
+	ifp->if_snd[a->altq_index].altq_bytes_sec=0;
 	return (0);
 }
 
@@ -182,7 +208,7 @@ int
 hfsc_remove_altq(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
-
+	//printf("hfsc_remove_altq: %d\n",a->altq_index);
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
 	a->altq_disc = NULL;
@@ -234,7 +260,8 @@ hfsc_add_queue(struct pf_altq *a)
 	    parent, a->qlimit, opts->flags, a->qid);
 	if (cl == NULL)
 		return (ENOMEM);
-
+	// Skon
+	//printf("hfsc_add_queue: %s %d %s %s a: %p p: %p hif:%p\n",a->ifname,a->altq_index,a->qname,a->parent,cl,parent,hif);
 	return (0);
 }
 
@@ -243,6 +270,7 @@ hfsc_remove_queue(struct pf_altq *a)
 {
 	struct hfsc_if *hif;
 	struct hfsc_class *cl;
+	//printf("hfsc_remove_altq: %d\n",a->altq_index);
 
 	if ((hif = a->altq_disc) == NULL)
 		return (EINVAL);
@@ -264,10 +292,15 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 	} stats;
 	size_t stats_size;
 	int error = 0;
-
-	if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
+	// Skon - add index
+	//printf("hfsc_getqstats: %s, %d\n",a->ifname,a->altq_index);
+	if ((hif = altq_lookup_indexed(a->ifname, a->altq_index, ALTQT_HFSC)) == NULL) {
+	  // if ((hif = altq_lookup(a->ifname, ALTQT_HFSC)) == NULL)
+	  //printf("hfsc_getqstats: hif: %p\n",hif);
 		return (EBADF);
-
+	}
+	// Skon
+	//printf("hfsc_getqstats: %s, %s, %d, %p\n",a->ifname,a->qname,a->altq_index,hif);
 	if ((cl = clh_to_clp(hif, a->qid)) == NULL)
 		return (EINVAL);
 
@@ -284,7 +317,7 @@ hfsc_getqstats(struct pf_altq *a, void *ubuf, int *nbytes, int version)
 		get_class_stats_v1(&stats.v1, cl);
 		stats_size = sizeof(struct hfsc_classstats_v1);
 		break;
-	}		
+	}
 
 	if (*nbytes < stats_size)
 		return (EINVAL);
@@ -356,10 +389,8 @@ hfsc_class_create(struct hfsc_if *hif, struct service_curve *rsc,
     struct hfsc_class *parent, int qlimit, int flags, int qid)
 {
 	struct hfsc_class *cl, *p;
+	struct hfsc_class_slot *hcs;
 	int i, s;
-
-	if (hif->hif_classes >= HFSC_MAX_CLASSES)
-		return (NULL);
 
 #ifndef ALTQ_RED
 	if (flags & HFCF_RED) {
@@ -481,27 +512,9 @@ hfsc_class_create(struct hfsc_if *hif, struct service_curve *rsc,
 	IFQ_LOCK(hif->hif_ifq);
 	hif->hif_classes++;
 
-	/*
-	 * find a free slot in the class table.  if the slot matching
-	 * the lower bits of qid is free, use this slot.  otherwise,
-	 * use the first free slot.
-	 */
-	i = qid % HFSC_MAX_CLASSES;
-	if (hif->hif_class_tbl[i] == NULL)
-		hif->hif_class_tbl[i] = cl;
-	else {
-		for (i = 0; i < HFSC_MAX_CLASSES; i++)
-			if (hif->hif_class_tbl[i] == NULL) {
-				hif->hif_class_tbl[i] = cl;
-				break;
-			}
-		if (i == HFSC_MAX_CLASSES) {
-			IFQ_UNLOCK(hif->hif_ifq);
-			splx(s);
-			goto err_ret;
-		}
-	}
-	cl->cl_slot = i;
+	i = qid % HFSC_CLASS_SLOTS;
+	hcs = &hif->hif_class_map[i];
+	TAILQ_INSERT_HEAD(&hcs->hcs_head, cl, cl_slist);
 
 	if (flags & HFCF_DEFAULTCLASS)
 		hif->hif_defaultclass = cl;
@@ -554,6 +567,8 @@ hfsc_class_create(struct hfsc_if *hif, struct service_curve *rsc,
 static int
 hfsc_class_destroy(struct hfsc_class *cl)
 {
+	struct hfsc_if *hif;
+	struct hfsc_class_slot *hcs;
 	int s;
 
 	if (cl == NULL)
@@ -561,9 +576,9 @@ hfsc_class_destroy(struct hfsc_class *cl)
 
 	if (is_a_parent_class(cl))
 		return (EBUSY);
-
 	s = splnet();
-	IFQ_LOCK(cl->cl_hif->hif_ifq);
+	hif = cl->cl_hif;
+	IFQ_LOCK(hif->hif_ifq);
 
 	if (!qempty(cl->cl_q))
 		hfsc_purgeq(cl);
@@ -584,9 +599,12 @@ hfsc_class_destroy(struct hfsc_class *cl)
 		ASSERT(p != NULL);
 	}
 
-	cl->cl_hif->hif_class_tbl[cl->cl_slot] = NULL;
-	cl->cl_hif->hif_classes--;
-	IFQ_UNLOCK(cl->cl_hif->hif_ifq);
+	hcs = &hif->hif_class_map[cl->cl_slot];
+	TAILQ_REMOVE(&hcs->hcs_head, cl, cl_slist);
+
+	hif->hif_classes--;
+	IFQ_UNLOCK(hif->hif_ifq);
+
 	splx(s);
 
 	if (cl->cl_red != NULL) {
@@ -604,12 +622,12 @@ hfsc_class_destroy(struct hfsc_class *cl)
 #endif
 	}
 
-	IFQ_LOCK(cl->cl_hif->hif_ifq);
-	if (cl == cl->cl_hif->hif_rootclass)
-		cl->cl_hif->hif_rootclass = NULL;
-	if (cl == cl->cl_hif->hif_defaultclass)
-		cl->cl_hif->hif_defaultclass = NULL;
-	IFQ_UNLOCK(cl->cl_hif->hif_ifq);
+	IFQ_LOCK(hif->hif_ifq);
+	if (cl == hif->hif_rootclass)
+		hif->hif_rootclass = NULL;
+	if (cl == hif->hif_defaultclass)
+		hif->hif_defaultclass = NULL;
+	IFQ_UNLOCK(hif->hif_ifq);
 
 	if (cl->cl_usc != NULL)
 		free(cl->cl_usc, M_DEVBUF);
@@ -650,50 +668,97 @@ hfsc_nextclass(struct hfsc_class *cl)
 /*
  * hfsc_enqueue is an enqueue function to be registered to
  * (*altq_enqueue) in struct ifaltq.
+ * Skon - assume ifq is actually an arrray of ifalt's to search for a matching class
+ * Must lock the right ifaltq structure here
  */
 static int
 hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 {
-	struct hfsc_if	*hif = (struct hfsc_if *)ifq->altq_disc;
-	struct hfsc_class *cl;
+        struct hfsc_class *cl=NULL; //, *cl_d=NULL;
 	struct pf_mtag *t;
-	int len;
+	int len=0;
 
-	IFQ_LOCK_ASSERT(ifq);
+	struct hfsc_if	*hif; // = (struct hfsc_if *)ifq[0].altq_disc;
+	int q_idx=0;
 
+	u_int64_t cur_time;
+	cur_time = read_machclk();
+	
 	/* grab class set by classifier */
 	if ((m->m_flags & M_PKTHDR) == 0) {
-		/* should not happen */
-		printf("altq: packet for %s does not have pkthdr\n",
-		    ifq->altq_ifp->if_xname);
-		m_freem(m);
-		return (ENOBUFS);
+	  /* should not happen */
+	  printf("altq: packet for %s does not have pkthdr\n",
+		 ifq[0].altq_ifp->if_xname);
+	  m_freem(m);
+	  
+	  return (ENOBUFS);
 	}
-	cl = NULL;
-	if ((t = pf_find_mtag(m)) != NULL)
-		cl = clh_to_clp(hif, t->qid);
-	if (cl == NULL || is_a_parent_class(cl)) {
-		cl = hif->hif_defaultclass;
-		if (cl == NULL) {
-			m_freem(m);
-			return (ENOBUFS);
-		}
+	
+	t = pf_find_mtag(m); // Get the tag
+	if (t!=NULL) {
+	  // lookup the index using the qid
+	  q_idx=V_qid_to_idx[t->qid];
+	  if (q_idx>=MAXQ) {
+	    printf("Queue number out of range! %d\n",q_idx);
+	    q_idx=0;
+	  }
+	} else {
+	  // Pick random queue if there is no tag
+	  int queues[MAXQ];
+	  int j=0;
+	  for (int i=0; i<MAXQ; i++) {
+	    if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i]))  {
+	      queues[j++]=i;
+	    }
+	  }
+	  int k=random()%j;
+	  q_idx=queues[k];
 	}
-	cl->cl_pktattr = NULL;
-	len = m_pktlen(m);
-	if (hfsc_addq(cl, m) != 0) {
-		/* drop occurred.  mbuf was freed in hfsc_addq. */
+	// Only work on valid queues 
+	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
+
+	  IFQ_LOCK(&ifq[q_idx]);
+	  
+	  hif = (struct hfsc_if *)ifq[q_idx].altq_disc;
+	  
+	  if (t!=NULL) 
+	    cl = clh_to_clp(hif, t->qid);
+
+	  if (cl == NULL || is_a_parent_class(cl)) {
+	    cl = hif->hif_defaultclass;
+	    if (cl == NULL) {
+	      printf("hsfc_enqueue: no default class for this queue: %d\n", q_idx);
+	      m_freem(m);	  
+	      IFQ_UNLOCK(&ifq[q_idx]);
+	      return (ENOBUFS);
+	    }
+	  }
+
+		cl->cl_pktattr = NULL;
+	  len = m_pktlen(m);
+	  if (hfsc_addq(cl, m) != 0) {
+	    /* drop occurred.  mbuf was freed in hfsc_addq. */
 		PKTCNTR_ADD(&cl->cl_stats.drop_cnt, len);
+		/// Skon - unlock
+		IFQ_UNLOCK(&ifq[q_idx]);
+		
 		return (ENOBUFS);
-	}
-	IFQ_INC_LEN(ifq);
-	cl->cl_hif->hif_packets++;
-
-	/* successfully queued. */
-	if (qlen(cl->cl_q) == 1)
-		set_active(cl, m_pktlen(m));
-
-	return (0);
+	  }
+	  IFQ_INC_LEN(&ifq[q_idx]);
+	  cl->cl_hif->hif_packets++;
+	
+	  /* successfully queued. */
+	  if (qlen(cl->cl_q) == 1)
+	    set_active(cl, m_pktlen(m));
+	  // Skon - add locking per queue
+	  IFQ_UNLOCK(&ifq[q_idx]);
+	  // Skon: return the negative of the queue number to queue the transmit to the right queue
+	  return (-q_idx);
+	} else {
+	  // NO queue was found, throw the packet away
+	  m_freem(m);	  
+	  return (ENOBUFS);
+	}	  
 }
 
 /*
@@ -715,15 +780,18 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	int realtime = 0;
 	u_int64_t cur_time;
 
-	IFQ_LOCK_ASSERT(ifq);
 
+	IFQ_LOCK_ASSERT(ifq);
 	if (hif->hif_packets == 0)
 		/* no packet in the tree */
 		return (NULL);
+	// Skon
+	//printf("DQ%d:%d",ifq->altq_index,hif->hif_packets);
 
 	cur_time = read_machclk();
 
 	if (op == ALTDQ_REMOVE && hif->hif_pollcache != NULL) {
+
 		cl = hif->hif_pollcache;
 		hif->hif_pollcache = NULL;
 		/* check if the class was scheduled by real-time criteria */
@@ -748,12 +816,14 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 			 */
 			cl = hif->hif_rootclass;
 			while (is_a_parent_class(cl)) {
+
 				cl = actlist_firstfit(cl, cur_time);
 				if (cl == NULL) {
 #ifdef ALTQ_DEBUG
 					if (fits > 0)
 						printf("%d fit but none found\n",fits);
 #endif
+				        //printf("N");
 					return (NULL);
 				}
 				/*
@@ -776,13 +846,27 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 	}
 
 	m = hfsc_getq(cl);
-	if (m == NULL)
-		panic("hfsc_dequeue:");
+	if (m == NULL) {
+	  printf("DROP!%d,%d\n",ifq->altq_index,hif->hif_packets);
+	  panic("hfsc_dequeue:");
+	}
+
 	len = m_pktlen(m);
 	cl->cl_hif->hif_packets--;
 	IFQ_DEC_LEN(ifq);
 	PKTCNTR_ADD(&cl->cl_stats.xmit_cnt, len);
 
+	/*// Skon - report per queue statistics
+	ifq->altq_packets_sec++;
+	ifq->altq_bytes_sec+=len;
+	if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
+	  printf("Dequeue %s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
+		 ifq->altq_index,ifq->altq_packets_sec,ifq->altq_bytes_sec);
+	  ifq->altq_sample_time=cur_time/machclk_freq;
+	  ifq->altq_packets_sec=0;
+	  ifq->altq_bytes_sec=0;
+	  }	
+	*/
 	update_vf(cl, len, cur_time);
 	if (realtime)
 		cl->cl_cumul += len;
@@ -801,8 +885,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 		/* the class becomes passive */
 		set_passive(cl);
 	}
-
-	return (m);
+	    return (m);
 }
 
 static int
@@ -955,6 +1038,7 @@ init_vf(struct hfsc_class *cl, int len)
 	cur_time = 0;
 	go_active = 1;
 	for ( ; cl->cl_parent != NULL; cl = cl->cl_parent) {
+
 		if (go_active && cl->cl_nactive++ == 0)
 			go_active = 1;
 		else
@@ -1044,6 +1128,7 @@ update_vf(struct hfsc_class *cl, int len, u_int64_t cur_time)
 	go_passive = qempty(cl->cl_q);
 
 	for (; cl->cl_parent != NULL; cl = cl->cl_parent) {
+
 		cl->cl_total += len;
 
 		if (cl->cl_fsc == NULL || cl->cl_nactive == 0)
@@ -1716,20 +1801,17 @@ clh_to_clp(struct hfsc_if *hif, u_int32_t chandle)
 {
 	int i;
 	struct hfsc_class *cl;
+	struct hfsc_class_slot *hcs;
 
 	if (chandle == 0)
 		return (NULL);
-	/*
-	 * first, try optimistically the slot matching the lower bits of
-	 * the handle.  if it fails, do the linear table search.
-	 */
-	i = chandle % HFSC_MAX_CLASSES;
-	if ((cl = hif->hif_class_tbl[i]) != NULL && cl->cl_handle == chandle)
-		return (cl);
-	for (i = 0; i < HFSC_MAX_CLASSES; i++)
-		if ((cl = hif->hif_class_tbl[i]) != NULL &&
-		    cl->cl_handle == chandle)
-			return (cl);
+
+	i = chandle % HFSC_CLASS_SLOTS;
+	hcs = &hif->hif_class_map[i];
+	TAILQ_FOREACH(cl, &hcs->hcs_head, cl_slist)
+		if (cl->cl_handle == chandle)
+			return cl;
+
 	return (NULL);
 }
 

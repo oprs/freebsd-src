@@ -60,7 +60,7 @@ struct service_curve_v1 {
 
 /* special class handles */
 #define	HFSC_NULLCLASS_HANDLE	0
-#define	HFSC_MAX_CLASSES	64
+#define	HFSC_CLASS_SLOTS	128
 
 /* hfsc class flags */
 #define	HFCF_RED		0x0001	/* use RED */
@@ -270,12 +270,20 @@ struct hfsc_class {
 	TAILQ_HEAD(acthead, hfsc_class) cl_actc; /* active children list */
 	TAILQ_ENTRY(hfsc_class)	cl_actlist;	/* active children list entry */
 	TAILQ_ENTRY(hfsc_class)	cl_ellist;	/* eligible list entry */
+	TAILQ_ENTRY(hfsc_class) cl_slist;	/* slot list entry */
 
 	struct {
 		struct pktcntr	xmit_cnt;
 		struct pktcntr	drop_cnt;
 		u_int period;
 	} cl_stats;
+};
+
+/*
+ * hfsc class slot
+ */
+struct hfsc_class_slot {
+	TAILQ_HEAD(clhead, hfsc_class) hcs_head;
 };
 
 /*
@@ -286,7 +294,7 @@ struct hfsc_if {
 	struct ifaltq		*hif_ifq;	/* backpointer to ifaltq */
 	struct hfsc_class	*hif_rootclass;		/* root class */
 	struct hfsc_class	*hif_defaultclass;	/* default class */
-	struct hfsc_class	*hif_class_tbl[HFSC_MAX_CLASSES];
+	struct hfsc_class_slot	 hif_class_map[HFSC_CLASS_SLOTS];
 	struct hfsc_class	*hif_pollcache;	/* cache for poll operation */
 
 	u_int	hif_classes;			/* # of classes in the tree */

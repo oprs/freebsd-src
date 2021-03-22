@@ -128,15 +128,30 @@ altq_lookup(name, type)
 
 	if ((ifp = ifunit(name)) != NULL) {
 		/* read if_snd unlocked */
-		if (type != ALTQT_NONE && ifp->if_snd.altq_type == type)
-			return (ifp->if_snd.altq_disc);
+		if (type != ALTQT_NONE && ifp->if_snd[0].altq_type == type)
+			return (ifp->if_snd[0].altq_disc);
+	}
+
+	return NULL;
+}
+/* Skon: New lookup version using index */
+/* look up the queue state by the interface name and the queueing type. */
+void *
+altq_lookup_indexed(char *name, uint8_t index, int type)
+{
+	struct ifnet *ifp;
+
+	if ((ifp = ifunit(name)) != NULL) {
+		/* read if_snd unlocked */
+		if (type != ALTQT_NONE && ifp->if_snd[index].altq_type == type)
+			return (ifp->if_snd[index].altq_disc);
 	}
 
 	return NULL;
 }
 
 int
-altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify)
+altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify, index)
 	struct ifaltq *ifq;
 	int type;
 	void *discipline;
@@ -145,6 +160,7 @@ altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify)
 	int (*request)(struct ifaltq *, int, void *);
 	void *clfier;
 	void *(*classify)(void *, struct mbuf *, int);
+	int index;
 {
 	IFQ_LOCK(ifq);
 	if (!ALTQ_IS_READY(ifq)) {
@@ -152,6 +168,8 @@ altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify)
 		return ENXIO;
 	}
 
+	// Skon
+	//printf("altq_attach: %d, %d, %p\n",type,index,ifq);
 	ifq->altq_type     = type;
 	ifq->altq_disc     = discipline;
 	ifq->altq_enqueue  = enqueue;
@@ -160,6 +178,9 @@ altq_attach(ifq, type, discipline, enqueue, dequeue, request, clfier, classify)
 	ifq->altq_clfier   = clfier;
 	ifq->altq_classify = classify;
 	ifq->altq_flags &= (ALTQF_CANTCHANGE|ALTQF_ENABLED);
+	// Skon - for use with multiple queues
+	ifq->altq_index = index;
+	ALTQ_SET_INUSE(ifq);
 	IFQ_UNLOCK(ifq);
 	return 0;
 }
@@ -196,10 +217,14 @@ altq_detach(ifq)
 	return 0;
 }
 
+// Skon - modify for indexed queues
 int
 altq_enable(ifq)
 	struct ifaltq *ifq;
 {
+  //uint8_t i=ifq->altq_index;
+    //printf("altq_enable:%d:%d:%p\n",i,ALTQ_IS_ENABLED(ifq),ifq);
+
 	int s;
 
 	IFQ_LOCK(ifq);
@@ -215,7 +240,7 @@ altq_enable(ifq)
 
 	s = splnet();
 	IFQ_PURGE_NOLOCK(ifq);
-	ASSERT(ifq->ifq_len == 0);
+	ASSERT(ifq.ifq_len == 0);
 	ifq->ifq_drv_maxlen = 0;		/* disable bulk dequeue */
 	ifq->altq_flags |= ALTQF_ENABLED;
 	if (ifq->altq_clfier != NULL)
@@ -223,6 +248,7 @@ altq_enable(ifq)
 	splx(s);
 
 	IFQ_UNLOCK(ifq);
+
 	return 0;
 }
 
@@ -283,6 +309,7 @@ tbr_dequeue(ifq, op)
 	u_int64_t now;
 
 	IFQ_LOCK_ASSERT(ifq);
+
 	tbr = ifq->altq_tbr;
 	if (op == ALTDQ_REMOVE && tbr->tbr_lastop == ALTDQ_POLL) {
 		/* if this is a remove after poll, bypass tbr check */
@@ -304,14 +331,16 @@ tbr_dequeue(ifq, op)
 		if (tbr->tbr_token <= 0)
 			return (NULL);
 	}
-
-	if (ALTQ_IS_ENABLED(ifq))
+	if (ALTQ_IS_ENABLED(ifq)) {
 		m = (*ifq->altq_dequeue)(ifq, op);
+	}
 	else {
-		if (op == ALTDQ_POLL)
+	  if (op == ALTDQ_POLL) {
 			_IF_POLL(ifq, m);
-		else
+	  }
+	  else {
 			_IF_DEQUEUE(ifq, m);
+	  }
 	}
 
 	if (m != NULL && op == ALTDQ_REMOVE)
@@ -331,6 +360,8 @@ tbr_set(ifq, profile)
 {
 	struct tb_regulator *tbr, *otbr;
 
+	// Skon
+	//printf("tbr_set: %d\n",ifq->altq_index);
 	if (tbr_dequeue_ptr == NULL)
 		tbr_dequeue_ptr = tbr_dequeue;
 
@@ -420,13 +451,20 @@ tbr_timeout(arg)
 		CURVNET_SET(vnet_iter);
 		for (ifp = CK_STAILQ_FIRST(&V_ifnet); ifp;
 		    ifp = CK_STAILQ_NEXT(ifp, if_link)) {
-			/* read from if_snd unlocked */
-			if (!TBR_IS_ENABLED(&ifp->if_snd))
+		  // Skon - do for each altq instance
+		  for (int i=0; i<MAXQ ; i++) {
+		    if (ALTQ_IS_ENABLED(&ifp->if_snd[i])) { 
+		        /* read from if_snd unlocked */
+			if (!TBR_IS_ENABLED(&ifp->if_snd[i]))
 				continue;
 			active++;
-			if (!IFQ_IS_EMPTY(&ifp->if_snd) &&
-			    ifp->if_start != NULL)
+			if (!IFQ_IS_EMPTY(&ifp->if_snd[i]) &&
+			    ifp->if_start != NULL) {
 				(*ifp->if_start)(ifp);
+				break; // Skon- Only need to kick once
+			    }
+		    }
+		  }
 		}
 		CURVNET_RESTORE();
 	}
@@ -488,6 +526,7 @@ altq_pfattach(struct pf_altq *a)
  * detach a discipline from the interface.
  * it is possible that the discipline was already overridden by another
  * discipline.
+ * Skon - must fix for multiple queues
  */
 int
 altq_pfdetach(struct pf_altq *a)
@@ -498,19 +537,27 @@ altq_pfdetach(struct pf_altq *a)
 	if ((ifp = ifunit(a->ifname)) == NULL)
 		return (EINVAL);
 
-	/* if this discipline is no longer referenced, just return */
-	/* read unlocked from if_snd */
-	if (a->altq_disc == NULL || a->altq_disc != ifp->if_snd.altq_disc)
-		return (0);
+	// Skon - do for all queues
+	for (int i=0; i<MAXQ; i++) {
+	  if (ALTQ_IS_INUSE(&ifp->if_snd[i])) {
+	    // Skon
+	    //printf("altq_pfdetach: %d\n",ifp->if_snd[i].altq_index);
+	    /* if this discipline is no longer referenced, just return */
+	    /* read unlocked from if_snd */
+	    if (a->altq_disc == NULL || a->altq_disc != ifp->if_snd[i].altq_disc)
+	      break;
+	    //return (0);
 
-	s = splnet();
-	/* read unlocked from if_snd, _disable and _detach take care */
-	if (ALTQ_IS_ENABLED(&ifp->if_snd))
-		error = altq_disable(&ifp->if_snd);
-	if (error == 0)
-		error = altq_detach(&ifp->if_snd);
-	splx(s);
-
+	    s = splnet();
+	    /* read unlocked from if_snd, _disable and _detach take care */
+	    if (ALTQ_IS_ENABLED(&ifp->if_snd[i]))
+		error = altq_disable(&ifp->if_snd[i]);
+	    if (error == 0)
+	      error = altq_detach(&ifp->if_snd[i]);
+	    splx(s);
+	  }
+	}
+	
 	return (error);
 }
 

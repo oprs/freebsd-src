@@ -848,7 +848,7 @@ sppp_output(struct ifnet *ifp, struct mbuf *m, const struct sockaddr *dst,
 		 * Put low delay, telnet, rlogin and ftp control packets
 		 * in front of the queue or let ALTQ take care.
 		 */
-		if (ALTQ_IS_ENABLED(&ifp->if_snd))
+		if (ALTQ_IS_ENABLED(&ifp->if_snd[0]))
 			;
 		else if (_IF_QFULL(&sp->pp_fastq))
 			;
@@ -1018,7 +1018,7 @@ sppp_attach(struct ifnet *ifp)
 #if 0
 	sp->pp_flags = PP_KEEPALIVE;
 #endif
- 	ifp->if_snd.ifq_maxlen = 32;
+ 	ifp->if_snd[0].ifq_maxlen = 32;
  	sp->pp_fastq.ifq_maxlen = 32;
  	sp->pp_cpq.ifq_maxlen = 20;
 	sp->pp_loopcnt = 0;
@@ -1081,7 +1081,7 @@ sppp_flush_unlocked(struct ifnet *ifp)
 {
 	struct sppp *sp = IFP2SP(ifp);
 
-	sppp_qflush ((struct ifqueue *)&SP2IFP(sp)->if_snd);
+	sppp_qflush ((struct ifqueue *)&SP2IFP(sp)->if_snd[0]);
 	sppp_qflush (&sp->pp_fastq);
 	sppp_qflush (&sp->pp_cpq);
 }
@@ -1107,7 +1107,7 @@ sppp_isempty(struct ifnet *ifp)
 
 	SPPP_LOCK(sp);
 	empty = !sp->pp_fastq.ifq_head && !sp->pp_cpq.ifq_head &&
-		!SP2IFP(sp)->if_snd.ifq_head;
+		!SP2IFP(sp)->if_snd[0].ifq_head;
 	SPPP_UNLOCK(sp);
 	return (empty);
 }
@@ -1134,7 +1134,7 @@ sppp_dequeue(struct ifnet *ifp)
 	     sp->pp_mode == PP_FR)) {
 		IF_DEQUEUE(&sp->pp_fastq, m);
 		if (m == NULL)
-			IF_DEQUEUE (&SP2IFP(sp)->if_snd, m);
+			IF_DEQUEUE (&SP2IFP(sp)->if_snd[0], m);
 	}
 	SPPP_UNLOCK(sp);
 	return m;
@@ -1157,7 +1157,7 @@ sppp_pick(struct ifnet *ifp)
 	     sp->pp_mode == IFF_CISCO ||
 	     sp->pp_mode == PP_FR))
 		if ((m = sp->pp_fastq.ifq_head) == NULL)
-			m = SP2IFP(sp)->if_snd.ifq_head;
+			m = SP2IFP(sp)->if_snd[0].ifq_head;
 	SPPP_UNLOCK(sp);
 	return (m);
 }

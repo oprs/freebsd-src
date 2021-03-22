@@ -915,9 +915,9 @@ nge_attach(device_t dev)
 	ifp->if_ioctl = nge_ioctl;
 	ifp->if_start = nge_start;
 	ifp->if_init = nge_init;
-	ifp->if_snd.ifq_drv_maxlen = NGE_TX_RING_CNT - 1;
-	IFQ_SET_MAXLEN(&ifp->if_snd, ifp->if_snd.ifq_drv_maxlen);
-	IFQ_SET_READY(&ifp->if_snd);
+	ifp->if_snd[0].ifq_drv_maxlen = NGE_TX_RING_CNT - 1;
+	IFQ_SET_MAXLEN(&ifp->if_snd[0], ifp->if_snd[0].ifq_drv_maxlen);
+	IFQ_SET_READY(&ifp->if_snd[0]);
 	ifp->if_hwassist = NGE_CSUM_FEATURES;
 	ifp->if_capabilities = IFCAP_HWCSUM;
 	/*
@@ -1778,7 +1778,7 @@ nge_poll(struct ifnet *ifp, enum poll_cmd cmd, int count)
 	sc->rxcycles = count;
 	rx_npkts = nge_rxeof(sc);
 	nge_txeof(sc);
-	if (!IFQ_DRV_IS_EMPTY(&ifp->if_snd))
+	if (!IFQ_DRV_IS_EMPTY(&ifp->if_snd[0]))
 		nge_start_locked(ifp);
 
 	if (sc->rxcycles > 0 || cmd == POLL_AND_CHECK_STATUS) {
@@ -1861,7 +1861,7 @@ nge_intr(void *arg)
 	/* Re-enable interrupts. */
 	CSR_WRITE_4(sc, NGE_IER, 1);
 
-	if (!IFQ_DRV_IS_EMPTY(&ifp->if_snd))
+	if (!IFQ_DRV_IS_EMPTY(&ifp->if_snd[0]))
 		nge_start_locked(ifp);
 
 	/* Data LED off for TBI mode */
@@ -2008,9 +2008,9 @@ nge_start_locked(struct ifnet *ifp)
 	    IFF_DRV_RUNNING || (sc->nge_flags & NGE_FLAG_LINK) == 0)
 		return;
 
-	for (enq = 0; !IFQ_DRV_IS_EMPTY(&ifp->if_snd) &&
+	for (enq = 0; !IFQ_DRV_IS_EMPTY(&ifp->if_snd[0]) &&
 	    sc->nge_cdata.nge_tx_cnt < NGE_TX_RING_CNT - 2; ) {
-		IFQ_DRV_DEQUEUE(&ifp->if_snd, m_head);
+		IFQ_DRV_DEQUEUE(&ifp->if_snd[0], m_head);
 		if (m_head == NULL)
 			break;
 		/*
@@ -2021,7 +2021,7 @@ nge_start_locked(struct ifnet *ifp)
 		if (nge_encap(sc, &m_head)) {
 			if (m_head == NULL)
 				break;
-			IFQ_DRV_PREPEND(&ifp->if_snd, m_head);
+			IFQ_DRV_PREPEND(&ifp->if_snd[0], m_head);
 			ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 			break;
 		}
@@ -2424,7 +2424,7 @@ nge_watchdog(struct nge_softc *sc)
 	ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
 	nge_init_locked(sc);
 
-	if (!IFQ_DRV_IS_EMPTY(&ifp->if_snd))
+	if (!IFQ_DRV_IS_EMPTY(&ifp->if_snd[0]))
 		nge_start_locked(ifp);
 }
 

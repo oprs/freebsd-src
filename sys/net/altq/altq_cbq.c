@@ -215,7 +215,7 @@ cbq_pfattach(struct pf_altq *a)
 	if ((ifp = ifunit(a->ifname)) == NULL || a->altq_disc == NULL)
 		return (EINVAL);
 	s = splnet();
-	error = altq_attach(&ifp->if_snd, ALTQT_CBQ, a->altq_disc,
+	error = altq_attach(&ifp->if_snd[0], ALTQT_CBQ, a->altq_disc,
 	    cbq_enqueue, cbq_dequeue, cbq_request, NULL, NULL);
 	splx(s);
 	return (error);
@@ -228,7 +228,7 @@ cbq_add_altq(struct ifnet *ifp, struct pf_altq *a)
 
 	if (ifp == NULL)
 		return (EINVAL);
-	if (!ALTQ_IS_READY(&ifp->if_snd))
+	if (!ALTQ_IS_READY(&ifp->if_snd[0]))
 		return (ENODEV);
 
 	/* allocate and initialize cbq_state_t */
@@ -237,7 +237,7 @@ cbq_add_altq(struct ifnet *ifp, struct pf_altq *a)
 		return (ENOMEM);
 	CALLOUT_INIT(&cbqp->cbq_callout);
 	cbqp->cbq_qlen = 0;
-	cbqp->ifnp.ifq_ = &ifp->if_snd;	    /* keep the ifq */
+	cbqp->ifnp.ifq_ = &ifp->if_snd[0];	    /* keep the ifq */
 
 	/* keep the state in pf_altq */
 	a->altq_disc = cbqp;

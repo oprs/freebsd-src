@@ -86,7 +86,7 @@ priq_pfattach(struct pf_altq *a)
 	if ((ifp = ifunit(a->ifname)) == NULL || a->altq_disc == NULL)
 		return (EINVAL);
 	s = splnet();
-	error = altq_attach(&ifp->if_snd, ALTQT_PRIQ, a->altq_disc,
+	error = altq_attach(&ifp->if_snd[0], ALTQT_PRIQ, a->altq_disc,
 	    priq_enqueue, priq_dequeue, priq_request, NULL, NULL);
 	splx(s);
 	return (error);
@@ -99,7 +99,7 @@ priq_add_altq(struct ifnet * ifp, struct pf_altq *a)
 
 	if (ifp == NULL)
 		return (EINVAL);
-	if (!ALTQ_IS_READY(&ifp->if_snd))
+	if (!ALTQ_IS_READY(&ifp->if_snd[0]))
 		return (ENODEV);
 
 	pif = malloc(sizeof(struct priq_if), M_DEVBUF, M_NOWAIT | M_ZERO);
@@ -107,7 +107,7 @@ priq_add_altq(struct ifnet * ifp, struct pf_altq *a)
 		return (ENOMEM);
 	pif->pif_bandwidth = a->ifbandwidth;
 	pif->pif_maxpri = -1;
-	pif->pif_ifq = &ifp->if_snd;
+	pif->pif_ifq = &ifp->if_snd[0];
 
 	/* keep the state in pf_altq */
 	a->altq_disc = pif;

@@ -861,7 +861,7 @@ tr_setup:
 		/*
 		 * XXX: don't send anything if there is no link?
 		 */
-		IFQ_DRV_DEQUEUE(&ifp->if_snd, m);
+		IFQ_DRV_DEQUEUE(&ifp->if_snd[0], m);
 		if (m == NULL)
 			return;
 

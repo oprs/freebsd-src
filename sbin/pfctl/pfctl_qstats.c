@@ -165,6 +165,7 @@ pfctl_update_qstats(int dev, struct pf_altq_node **root)
 
 	mnr = pa.nr;
 	for (nr = 0; nr < mnr; ++nr) {
+	  
 		pa.nr = nr;
 		if (ioctl(dev, DIOCGETALTQ, &pa)) {
 			warn("DIOCGETALTQ");
@@ -183,6 +184,8 @@ pfctl_update_qstats(int dev, struct pf_altq_node **root)
 			pq.version = altq_stats_version(pa.altq.scheduler);
 			if (ioctl(dev, DIOCGETQSTATS, &pq)) {
 				warn("DIOCGETQSTATS");
+				printf("In pfctl_update_qstats error\n");
+				
 				return (-1);
 			}
 			if ((node = pfctl_find_altq_node(*root, pa.altq.qname,

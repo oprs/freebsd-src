@@ -839,14 +839,14 @@ tunstart(struct ifnet *ifp)
 	struct mbuf *m;
 
 	TUNDEBUG(ifp, "starting\n");
-	if (ALTQ_IS_ENABLED(&ifp->if_snd)) {
-		IFQ_LOCK(&ifp->if_snd);
-		IFQ_POLL_NOLOCK(&ifp->if_snd, m);
+	if (ALTQ_IS_ENABLED(&ifp->if_snd[0])) {
+		IFQ_LOCK(&ifp->if_snd[0]);
+		IFQ_POLL_NOLOCK(&ifp->if_snd[0], m);
 		if (m == NULL) {
-			IFQ_UNLOCK(&ifp->if_snd);
+			IFQ_UNLOCK(&ifp->if_snd[0]);
 			return;
 		}
-		IFQ_UNLOCK(&ifp->if_snd);
+		IFQ_UNLOCK(&ifp->if_snd[0]);
 	}
 
 	TUN_LOCK(tp);
@@ -889,7 +889,7 @@ tunstart_l2(struct ifnet *ifp)
 		TUNDEBUG(ifp, "not ready, tun_flags = 0x%x\n", tp->tun_flags);
 
 		for (;;) {
-			IF_DEQUEUE(&ifp->if_snd, m);
+			IF_DEQUEUE(&ifp->if_snd[0], m);
 			if (m != NULL) {
 				m_freem(m);
 				if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
@@ -903,7 +903,7 @@ tunstart_l2(struct ifnet *ifp)
 
 	ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 
-	if (!IFQ_IS_EMPTY(&ifp->if_snd)) {
+	if (!IFQ_IS_EMPTY(&ifp->if_snd[0])) {
 		if (tp->tun_flags & TUN_RWAIT) {
 			tp->tun_flags &= ~TUN_RWAIT;
 			wakeup(tp);
@@ -956,7 +956,7 @@ tuncreate(struct cdev *dev)
 	if_initname(ifp, drv->cdevsw.d_name, dev2unit(dev));
 	ifp->if_ioctl = tunifioctl;
 	ifp->if_flags = iflags;
-	IFQ_SET_MAXLEN(&ifp->if_snd, ifqmaxlen);
+	IFQ_SET_MAXLEN(&ifp->if_snd[0], ifqmaxlen);
 	ifp->if_capabilities |= IFCAP_LINKSTATE;
 	ifp->if_capenable |= IFCAP_LINKSTATE;
 
@@ -971,8 +971,8 @@ tuncreate(struct cdev *dev)
 		ifp->if_start = tunstart;
 		ifp->if_output = tunoutput;
 
-		ifp->if_snd.ifq_drv_maxlen = 0;
-		IFQ_SET_READY(&ifp->if_snd);
+		ifp->if_snd[0].ifq_drv_maxlen = 0;
+		IFQ_SET_READY(&ifp->if_snd[0]);
 
 		if_attach(ifp);
 		bpfattach(ifp, DLT_NULL, sizeof(u_int32_t));
@@ -1142,9 +1142,9 @@ tundtor(void *data)
 	l2tun = false;
 	if ((tp->tun_flags & TUN_L2) != 0) {
 		l2tun = true;
-		IF_DRAIN(&ifp->if_snd);
+		IF_DRAIN(&ifp->if_snd[0]);
 	} else {
-		IFQ_PURGE(&ifp->if_snd);
+		IFQ_PURGE(&ifp->if_snd[0]);
 	}
 
 	/* For vmnet, we won't do most of the address/route bits */
@@ -1632,13 +1632,13 @@ tunioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 		TUN_UNLOCK(tp);
 		break;
 	case FIONREAD:
-		if (!IFQ_IS_EMPTY(&TUN2IFP(tp)->if_snd)) {
+		if (!IFQ_IS_EMPTY(&TUN2IFP(tp)->if_snd[0])) {
 			struct mbuf *mb;
-			IFQ_LOCK(&TUN2IFP(tp)->if_snd);
-			IFQ_POLL_NOLOCK(&TUN2IFP(tp)->if_snd, mb);
+			IFQ_LOCK(&TUN2IFP(tp)->if_snd[0]);
+			IFQ_POLL_NOLOCK(&TUN2IFP(tp)->if_snd[0], mb);
 			for (*(int *)data = 0; mb != NULL; mb = mb->m_next)
 				*(int *)data += mb->m_len;
-			IFQ_UNLOCK(&TUN2IFP(tp)->if_snd);
+			IFQ_UNLOCK(&TUN2IFP(tp)->if_snd[0]);
 		} else
 			*(int *)data = 0;
 		break;
@@ -1688,7 +1688,7 @@ tunread(struct cdev *dev, struct uio *uio, int flag)
 	tp->tun_flags &= ~TUN_RWAIT;
 
 	for (;;) {
-		IFQ_DEQUEUE(&ifp->if_snd, m);
+		IFQ_DEQUEUE(&ifp->if_snd[0], m);
 		if (m != NULL)
 			break;
 		if (flag & O_NONBLOCK) {
@@ -1914,15 +1914,15 @@ tunpoll(struct cdev *dev, int events, struct thread *td)
 	TUNDEBUG(ifp, "tunpoll\n");
 
 	if (events & (POLLIN | POLLRDNORM)) {
-		IFQ_LOCK(&ifp->if_snd);
-		if (!IFQ_IS_EMPTY(&ifp->if_snd)) {
-			TUNDEBUG(ifp, "tunpoll q=%d\n", ifp->if_snd.ifq_len);
+		IFQ_LOCK(&ifp->if_snd[0]);
+		if (!IFQ_IS_EMPTY(&ifp->if_snd[0])) {
+			TUNDEBUG(ifp, "tunpoll q=%d\n", ifp->if_snd[0].ifq_len);
 			revents |= events & (POLLIN | POLLRDNORM);
 		} else {
 			TUNDEBUG(ifp, "tunpoll waiting\n");
 			selrecord(td, &tp->tun_rsel);
 		}
-		IFQ_UNLOCK(&ifp->if_snd);
+		IFQ_UNLOCK(&ifp->if_snd[0]);
 	}
 	revents |= events & (POLLOUT | POLLWRNORM);
 
@@ -1974,10 +1974,10 @@ tunkqread(struct knote *kn, long hint)
 	struct cdev		*dev = tp->tun_dev;
 	struct ifnet	*ifp = TUN2IFP(tp);
 
-	if ((kn->kn_data = ifp->if_snd.ifq_len) > 0) {
+	if ((kn->kn_data = ifp->if_snd[0].ifq_len) > 0) {
 		TUNDEBUG(ifp,
 		    "%s have data in the queue.  Len = %d, minor = %#x\n",
-		    ifp->if_xname, ifp->if_snd.ifq_len, dev2unit(dev));
+		    ifp->if_xname, ifp->if_snd[0].ifq_len, dev2unit(dev));
 		ret = 1;
 	} else {
 		TUNDEBUG(ifp,

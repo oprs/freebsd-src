@@ -146,7 +146,7 @@ edsc_clone_create(struct if_clone *ifc, int unit, caddr_t params)
 	/*
 	 * Set the maximum output queue length from the global parameter.
 	 */
-	ifp->if_snd.ifq_maxlen = ifqmaxlen;
+	ifp->if_snd[0].ifq_maxlen = ifqmaxlen;
 
 	/*
 	 * Generate an arbitrary MAC address for the cloned interface.
@@ -287,7 +287,7 @@ edsc_start(struct ifnet *ifp)
 		 * Try to dequeue one packet.  Stop if the queue is empty.
 		 * Use IF_DEQUEUE() here if ALTQ(9) support is unneeded.
 		 */
-		IFQ_DEQUEUE(&ifp->if_snd, m);
+		IFQ_DEQUEUE(&ifp->if_snd[0], m);
 		if (m == NULL)
 			break;
 
