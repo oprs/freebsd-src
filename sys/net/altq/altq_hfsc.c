@@ -769,7 +769,7 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	    //printf("DQ%d",q_idx);
 	  }
 	  //	  if (t!=NULL)
-	  //  printf("Q%d:%d ",t->qid,q_idx);
+	  //printf("EQ%d ",q_idx);
 	  //else
 	  //  printf("N%d ",q_idx);
 	} else {
@@ -842,7 +842,7 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 		/* no packet in the tree */
 		return (NULL);
 	// Skon
-	//printf("B%d:%d",ifq->altq_index,hif->hif_packets);
+	//printf("DQ%d:%d",ifq->altq_index,hif->hif_packets);
 
 	cur_time = read_machclk();
 
@@ -897,18 +897,6 @@ hfsc_dequeue(struct ifaltq *ifq, int op)
 		if (op == ALTDQ_POLL) {
 			hif->hif_pollcache = cl;
 			m = hfsc_pollq(cl);
-			// Skon - report per queue statistics
-			len = m_pktlen(m);
-			ifq->altq_packets_sec++;
-			ifq->altq_bytes_sec+=len;
-			if (ifq->altq_sample_time+10<cur_time/machclk_freq) {
-			  printf("-%s Q%d %lu Pkts %lu B\n",ifq->altq_ifp->if_xname,
-				 ifq->altq_index,ifq->altq_packets_sec,ifq->altq_bytes_sec);
-			  ifq->altq_sample_time=cur_time/machclk_freq;
-			  ifq->altq_packets_sec=0;
-			  ifq->altq_bytes_sec=0;
-			  }	
-	
 			return (m);
 		}
 	}

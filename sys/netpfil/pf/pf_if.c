@@ -139,6 +139,7 @@ void
 pfi_initialize(void)
 {
 
+  printf("pfi_attach_cookie\n");
 	pfi_attach_cookie = EVENTHANDLER_REGISTER(ifnet_arrival_event,
 	    pfi_attach_ifnet_event, NULL, EVENTHANDLER_PRI_ANY);
 	pfi_detach_cookie = EVENTHANDLER_REGISTER(ifnet_departure_event,

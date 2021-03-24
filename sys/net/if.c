@@ -4462,9 +4462,8 @@ int
 if_setsendqready(if_t ifp)
 {
 	for (int i = 0; i < MAXQ; i++) {
-	  printf("if_setsendqready: %d ",i);
 	  if(ALTQ_IS_INUSE(&((struct ifnet *)ifp)->if_snd[i]))
-	    printf("I");
+	    printf("if_setsendqready: %d ",i);
 		IFQ_SET_READY(&((struct ifnet *)ifp)->if_snd[i]);
 	}
 	return (0);
@@ -4570,7 +4569,6 @@ if_multi_apply(struct ifnet *ifp, int (*filter)(void *, struct ifmultiaddr *, in
 struct mbuf *
 if_dequeue(if_t ifp)
 {
-	// Skon - make it look for longest queue?
 	struct mbuf *m;
 	IFQ_DRV_DEQUEUE(&((struct ifnet *)ifp)->if_snd[0], m);
 
@@ -4580,7 +4578,6 @@ if_dequeue(if_t ifp)
 int
 if_sendq_prepend(if_t ifp, struct mbuf *m)
 {
-	// Skon - need to add index
 	IFQ_DRV_PREPEND(&((struct ifnet *)ifp)->if_snd[0], m);
 	return (0);
 }

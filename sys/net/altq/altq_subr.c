@@ -608,7 +608,7 @@ altq_add(struct ifnet *ifp, struct pf_altq *a)
 		init_machclk();
 	if (machclk_freq == 0)
 		panic("altq_add: no cpu clock");
-
+	//printf("altq_add: %d\n",a->scheduler);
 	switch (a->scheduler) {
 #ifdef ALTQ_CBQ
 	case ALTQT_CBQ:
