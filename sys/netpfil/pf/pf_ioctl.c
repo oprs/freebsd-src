@@ -264,7 +264,7 @@ static void
 pfattach_vnet(void)
 {
 	u_int32_t *my_timeout = V_pf_default_rule.timeout;
-
+	//printf("pfattach_vnet\n");
 	pf_initialize();
 	pfr_initialize();
 	pfi_initialize_vnet();
@@ -837,6 +837,7 @@ pf_altq_ifnet_event(struct ifnet *ifp, int remove)
 	 * that do not support ALTQ, as it's not possible for such
 	 * interfaces to be part of the configuration.
 	 */
+	printf("pf_altq_ifnet_event\n");
 	if (!ALTQ_IS_READY(&ifp->if_snd[0]))
 		return;
 
@@ -4401,7 +4402,7 @@ static int
 pf_load(void)
 {
 	int error;
-
+	//printf("pf_load\n");
 	rm_init(&pf_rules_lock, "pf rulesets");
 	sx_init(&pf_ioctl_lock, "pf ioctl");
 	sx_init(&pf_end_lock, "pf end thread");

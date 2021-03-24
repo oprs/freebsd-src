@@ -4161,7 +4161,7 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	 * XXX calculate buf_ring based on flowid (divvy up bits?)
 	 */
 	//if (index!=qidx)
-	//  printf("%d:%d ",index,qidx);
+	//printf("%d:%d:%d ",index,qidx,NTXQSETS(ctx));
 	txq = &ctx->ifc_txqs[qidx];
 #ifdef MULTIQ_TEST
 	iflib_queue_count(txq, m,ifp->if_xname,qidx,1);
