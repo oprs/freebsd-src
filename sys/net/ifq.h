@@ -321,7 +321,6 @@ do {									\
 	}								\
 } while (0)
 
-// Skon.  This must be fixed to work with multiqueue
 // Since we don't know which queue the gcvd
 #define	IFQ_DRV_PREPEND(ifq, m)						\
 do {									\
@@ -351,6 +350,7 @@ static __inline int
 drbr_enqueue(struct ifnet *ifp, struct buf_ring *br, struct mbuf *m)
 {	
 	int error = 0;
+  printf("drbr_enqueue "); // Skon	
 
 #ifdef ALTQ
 	if (ALTQ_IS_ENABLED(ifp->if_snd)) {
