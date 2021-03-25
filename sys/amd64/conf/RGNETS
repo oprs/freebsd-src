@@ -70,6 +70,7 @@ options		ALTQ_HFSC       # Hierarchical Packet Scheduler (HFSC)
 # Interfaces not static in GENERIC
 device		bnxt
 device		if_bridge
+device		lagg
 
 # PPPoE
 options		NETGRAPH
