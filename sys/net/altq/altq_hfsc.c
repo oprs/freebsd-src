@@ -219,6 +219,8 @@ hfsc_add_altq(struct ifnet *ifp, struct pf_altq *a)
 
 	/* keep the state in pf_altq */
 	a->altq_disc = hif;
+	ALTQ_SET_INUSE(&ifp->if_snd[a->altq_index]);
+
 	// Skon
 	//printf("Add hfsc_if Intf: %s, idx: %d, qn: %s hfsc addr: %p\n", a->ifname, a->altq_index, a->qname, (void *)hif);
 	// Skon - add the root index to the ifaltq

@@ -72,6 +72,8 @@ device		bnxt
 device		if_bridge
 device		lagg
 
+device 		lagg
+
 # PPPoE
 options		NETGRAPH
 options		NETGRAPH_ETHER
