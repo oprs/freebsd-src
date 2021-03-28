@@ -4514,7 +4514,8 @@ if_getamcount(if_t ifp)
 int
 if_setsendqready(if_t ifp)
 {
-  printf("if_setsendqready start\n");
+	if (bootverbose)
+		printf("if_setsendqready start\n");
 	for (int i = 0; i < MAXQ; i++) {
 	  //if(ALTQ_IS_INUSE(&((struct ifnet *)ifp)->if_snd[i]))
 	  //printf("if_setsendqready: %d ",i);
