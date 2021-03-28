@@ -2536,7 +2536,7 @@ DIOCGETSTATES_full:
 					altq->altq_disc = a->altq_disc;
 					// Skon: Save index in index map
 					V_qid_to_idx[altq->qid]=altq->altq_index;
-					printf("Add Queue: %s:%s QID: %d Index: %d\n",altq->ifname,altq->qname,altq->qid,altq->altq_index);
+					//printf("Add Queue: %s:%s QID: %d Index: %d\n",altq->ifname,altq->qname,altq->qid,altq->altq_index);
 					break;
 				}
 			}

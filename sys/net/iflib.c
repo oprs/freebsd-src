@@ -4018,7 +4018,7 @@ iflib_if_init(void *arg)
 
 // Skon - function to test queue usage
 static void
-iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int altq) {
+iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int altq, int numQ) {
   u_int64_t cur_time = read_machclk();
   // Skon - report per queue statistics
   if (!txq) {
@@ -4037,7 +4037,7 @@ iflib_queue_count(iflib_txq_t txq, struct mbuf *m, char * ifname, int index, int
     txq->altq_packets++;
     if (txq->altq_sample_time+10<cur_time/machclk_freq) {
       if (bootverbose)
-        printf("ALTQ: %s Q%d %lu Pkts\n",ifname,index,txq->altq_packets);
+        printf("ALTQ(%d): %s Q%d %lu Pkts\n",numQ,ifname,index,txq->altq_packets);
       txq->altq_sample_time=cur_time/machclk_freq;
       txq->altq_packets=0;
     }
@@ -4164,7 +4164,7 @@ iflib_if_transmit_altq(if_t ifp, struct mbuf *m, int index)
 	//printf("%d:%d:%d ",index,qidx,NTXQSETS(ctx));
 	txq = &ctx->ifc_txqs[qidx];
 #ifdef MULTIQ_TEST
-	iflib_queue_count(txq, m,ifp->if_xname,qidx,1);
+	iflib_queue_count(txq, m,ifp->if_xname,qidx,1,NTXQSETS(ctx));
 #endif
 #ifdef DRIVER_BACKPRESSURE
 	if (txq->ift_closed) {
