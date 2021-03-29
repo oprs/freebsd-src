@@ -743,14 +743,12 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  int queues[MAXQ];
 	  int j=0;
 	  for (int i=0; i<MAXQ; i++) {
-	    // horrible solution, but find all active queues
 	    if (ALTQ_IS_ENABLED(&ifq[i]) && ALTQ_IS_INUSE(&ifq[i]))  {
 	      queues[j++]=i;
 	    }
 	  }
 	  int k=random()%j;
 	  q_idx=queues[k];
-	  //printf("R%d",q_idx);	  
 	}
 	// Only work on valid queues 
 	if (ALTQ_IS_ENABLED(&ifq[q_idx]) && ALTQ_IS_INUSE(&ifq[q_idx]))  {
@@ -768,29 +766,19 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 #endif
 	  if (cl == NULL || is_a_parent_class(cl)) {
 	    cl = hif->hif_defaultclass;
-	    //printf("DQ%d",q_idx);
+	    if (cl == NULL) {
+	      printf("hsfc_enqueue: no default class for this queue: %d\n");
+	      m_freem(m);	  
+	      IFQ_UNLOCK(&ifq[q_idx]);
+	      return (ENOBUFS);
 	  }
-	  //	  if (t!=NULL)
-	  //printf("EQ%d ",q_idx);
-	  //else
-	  //  printf("N%d ",q_idx);
+
 	} else {
 	  m_freem(m);	  
+	  IFQ_UNLOCK(&ifq[q_idx]);
 	  return (ENOBUFS);
 	}
 
-	// Skon - report per queue statistics           
-        /*ifq[q_idx].altq_packets_sec++;
-        ifq[q_idx].altq_bytes_sec+=len;
-        if (ifq[q_idx].altq_sample_time+10<cur_time/machclk_freq) {
-          printf("Enqueue %s Q%d:%d %lu Pkts %lu B\n",ifq[q_idx].altq_ifp->if_xname,
-                 ifq[q_idx].altq_index,q_idx,ifq[q_idx].altq_packets_sec,ifq[q_idx].altq_bytes_sec);
-          ifq[q_idx].altq_sample_time=cur_time/machclk_freq;
-          ifq[q_idx].altq_packets_sec=0;
-          ifq[q_idx].altq_bytes_sec=0;
-          }*/
-
-	
 #ifdef ALTQ3_COMPAT
 	if (pktattr != NULL)
 		cl->cl_pktattr = pktattr;  /* save proto hdr used by ECN */
@@ -799,7 +787,6 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 		cl->cl_pktattr = NULL;
 	len = m_pktlen(m);
 	if (hfsc_addq(cl, m) != 0) {
-	  //printf("Drop%d ",q_idx);
 	  /* drop occurred.  mbuf was freed in hfsc_addq. */
 		PKTCNTR_ADD(&cl->cl_stats.drop_cnt, len);
 		/// Skon - unlock
