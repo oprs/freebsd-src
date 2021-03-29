@@ -767,10 +767,11 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	  if (cl == NULL || is_a_parent_class(cl)) {
 	    cl = hif->hif_defaultclass;
 	    if (cl == NULL) {
-	      printf("hsfc_enqueue: no default class for this queue: %d\n");
+	      printf("hsfc_enqueue: no default class for this queue: %d\n", q_idx);
 	      m_freem(m);	  
 	      IFQ_UNLOCK(&ifq[q_idx]);
 	      return (ENOBUFS);
+	    }
 	  }
 
 	} else {
