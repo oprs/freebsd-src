@@ -774,37 +774,36 @@ hfsc_enqueue(struct ifaltq *ifq, struct mbuf *m, struct altq_pktattr *pktattr)
 	    }
 	  }
 
-	} else {
-	  m_freem(m);	  
-	  IFQ_UNLOCK(&ifq[q_idx]);
-	  return (ENOBUFS);
-	}
-
 #ifdef ALTQ3_COMPAT
-	if (pktattr != NULL)
+	  if (pktattr != NULL)
 		cl->cl_pktattr = pktattr;  /* save proto hdr used by ECN */
-	else
+	  else
 #endif
 		cl->cl_pktattr = NULL;
-	len = m_pktlen(m);
-	if (hfsc_addq(cl, m) != 0) {
-	  /* drop occurred.  mbuf was freed in hfsc_addq. */
+	  len = m_pktlen(m);
+	  if (hfsc_addq(cl, m) != 0) {
+	    /* drop occurred.  mbuf was freed in hfsc_addq. */
 		PKTCNTR_ADD(&cl->cl_stats.drop_cnt, len);
 		/// Skon - unlock
 		IFQ_UNLOCK(&ifq[q_idx]);
 		
 		return (ENOBUFS);
-	}
-	IFQ_INC_LEN(&ifq[q_idx]);
-	cl->cl_hif->hif_packets++;
-
-	/* successfully queued. */
-	if (qlen(cl->cl_q) == 1)
-		set_active(cl, m_pktlen(m));
-	// Skon - add locking per queue
-	IFQ_UNLOCK(&ifq[q_idx]);
-	// Skon: return the negative of the queue number to queue the transmit to the right queue
-	return (-q_idx);
+	  }
+	  IFQ_INC_LEN(&ifq[q_idx]);
+	  cl->cl_hif->hif_packets++;
+	
+	  /* successfully queued. */
+	  if (qlen(cl->cl_q) == 1)
+	    set_active(cl, m_pktlen(m));
+	  // Skon - add locking per queue
+	  IFQ_UNLOCK(&ifq[q_idx]);
+	  // Skon: return the negative of the queue number to queue the transmit to the right queue
+	  return (-q_idx);
+	} else {
+	  // NO queue was found, throw the packet away
+	  m_freem(m);	  
+	  return (ENOBUFS);
+	}	  
 }
 
 /*
