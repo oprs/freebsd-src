@@ -2366,7 +2366,6 @@ pf_send_tcp(struct mbuf *replyto, const struct pf_rule *r, sa_family_t af,
 	struct pf_send_entry *pfse;
 	struct mbuf	*m;
 	int		 len, tlen;
-	printf("$");
 #ifdef INET
 	struct ip	*h = NULL;
 #endif /* INET */
