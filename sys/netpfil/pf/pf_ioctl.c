@@ -837,7 +837,6 @@ pf_altq_ifnet_event(struct ifnet *ifp, int remove)
 	 * that do not support ALTQ, as it's not possible for such
 	 * interfaces to be part of the configuration.
 	 */
-	printf("pf_altq_ifnet_event\n");
 	if (!ALTQ_IS_READY(&ifp->if_snd[0]))
 		return;
 
