@@ -1406,8 +1406,8 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 	int			 error = 0;
 	PF_RULES_RLOCK_TRACKER;
 	/* XXX keep in sync with switch() below */
-	if (securelevel_gt(td->td_ucred, 2))
-		switch (cmd) {
+	if (securelevel_gt(td->td_ucred, 2)) {
+	      switch (cmd) {
 		case DIOCGETRULES:
 		case DIOCGETRULE:
 		case DIOCGETADDRS:
@@ -1461,8 +1461,10 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 		default:
 			return (EPERM);
 		}
+	}
 
-	if (!(flags & FWRITE))
+
+	if (!(flags & FWRITE)) {
 		switch (cmd) {
 		case DIOCGETRULES:
 		case DIOCGETADDRS:
@@ -1515,6 +1517,7 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 		default:
 			return (EACCES);
 		}
+	}
 
 	CURVNET_SET(TD_TO_VNET(td));
 
@@ -2600,6 +2603,7 @@ DIOCGETSTATES_full:
 		break;
 	}
 
+	
 	case DIOCCHANGEALTQV0:
 	case DIOCCHANGEALTQV1:
 		/* CHANGEALTQ not supported yet! */
@@ -2647,6 +2651,7 @@ DIOCGETSTATES_full:
 		}
 		break;
 	}
+
 #endif /* ALTQ */
 
 	case DIOCBEGINADDRS: {
@@ -3948,7 +3953,6 @@ DIOCCHANGEADDR_error:
 	}
 
 	default:
-	  printf("Default\n");
 
 	        error = ENODEV;
 		break;
@@ -3959,7 +3963,7 @@ fail:
 	CURVNET_RESTORE();
 
 	return (error);
-}
+}	
 
 void
 pfsync_state_export(struct pfsync_state *sp, struct pf_state *st)

@@ -4,6 +4,7 @@
 .include <src.opts.mk>
 
 SUBDIR=adjkerntz \
+	altqmon \
 	bngconfig \
 	camcontrol \
 	clri \

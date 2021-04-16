@@ -1373,6 +1373,7 @@ struct pfioc_qstats_v1 {
 	 * written entirely in terms of the v0 or v1 type.
 	 */
 	u_int32_t	 version;  /* Requested version of stats struct */
+  u_int8_t         clear;  /* Skon - clear stats */
 };
 
 /* Latest version of struct pfioc_qstats_vX */
@@ -1513,6 +1514,8 @@ struct pfioc_iface {
 #define	DIOCSETIFFLAG	_IOWR('D', 89, struct pfioc_iface)
 #define	DIOCCLRIFFLAG	_IOWR('D', 90, struct pfioc_iface)
 #define	DIOCKILLSRCNODES	_IOWR('D', 91, struct pfioc_src_node_kill)
+
+
 struct pf_ifspeed_v0 {
 	char			ifname[IFNAMSIZ];
 	u_int32_t		baudrate;
