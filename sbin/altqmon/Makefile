@@ -8,7 +8,7 @@
 PACKAGE=altqmon
 #CONFS=	pf.os
 PROG=	altqmon
-MAN=  altqmon
+MAN=
 SRCS = altqmon.c
 
 WARNS?=	2
