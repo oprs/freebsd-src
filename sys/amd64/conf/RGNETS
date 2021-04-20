@@ -71,8 +71,7 @@ options		ALTQ_HFSC       # Hierarchical Packet Scheduler (HFSC)
 device		bnxt
 device		if_bridge
 device		lagg
-
-device 		lagg
+device 		gre
 
 # PPPoE
 options		NETGRAPH
