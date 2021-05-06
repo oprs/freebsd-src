@@ -231,13 +231,13 @@ if [ -n "$git_cmd" ] ; then
 			git=" ${git}"
 		fi
 	fi
-	git_b=`$git_cmd rev-parse --abbrev-ref HEAD`
-	if [ -n "$git_b" ] ; then
-		git="${git}(${git_b})"
-	fi
+	#git_b=`$git_cmd rev-parse --abbrev-ref HEAD`
+	#if [ -n "$git_b" ] ; then
+		#git="${git}(${git_b})"
+	#fi
 	if $git_cmd --work-tree=${VCSTOP} diff-index \
 	    --name-only HEAD | read dummy; then
-		git="${git}-dirty"
+		#git="${git}-dirty"
 		modified=true
 	fi
 fi
@@ -281,7 +281,7 @@ while getopts rR opt; do
 		;;
 	R)
 		if [ -z "${modified}" ]; then
-			include_metadata=
+			include_metadata=true
 		fi
 	esac
 done
@@ -291,8 +291,10 @@ if [ -z "${include_metadata}" ]; then
 	VERINFO="${VERSION}${svn}${git}${hg}${p4version} ${i}"
 	VERSTR="${VERINFO}\\n"
 else
-	VERINFO="${VERSION} #${v}${svn}${git}${hg}${p4version}: ${t}"
-	VERSTR="${VERINFO}\\n    ${u}@${h}:${d}\\n"
+	#VERINFO="${VERSION} #${v}${svn}${git}${hg}${p4version}: ${t}"
+	#VERSTR="${VERINFO}\\n    ${u}@${h}:${d}\\n"
+	VERINFO="${VERSION} #${v}${svn}${git}${hg}${p4version}"
+	VERSTR="${VERINFO}\\n"
 fi
 
 cat << EOF > vers.c
