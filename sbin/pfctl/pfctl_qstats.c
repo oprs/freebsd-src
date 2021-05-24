@@ -101,7 +101,7 @@ pfctl_show_altq(int dev, const char *iface, int opts, int verbose2)
 	if (!altqsupport)
 		return (-1);
 #endif
-	//printf("Skon: pfctl_show_altq %d, %s, %d, %d\n",dev,iface,opts,verbose2);
+	printf("Skon: pfctl_show_altq %d, %s, %d, %d\n",dev,iface,opts,verbose2);
 	if ((nodes = pfctl_update_qstats(dev, &root)) < 0)
 		return (-1);
 

@@ -255,9 +255,6 @@ print_altq(const struct pf_altq *a, unsigned int level,
 	if (a->local_flags & PFALTQ_FLAG_IF_REMOVED)
 		printf("INACTIVE ");
 #endif
-	// Skon
-	//printf("altq on %s ", a->ifname);
-
 	switch (a->scheduler) {
 	case ALTQT_CBQ:
 		if (!print_cbq_opts(a))
@@ -280,7 +277,6 @@ print_altq(const struct pf_altq *a, unsigned int level,
 			printf("codel ");
 		break;
 	}
-
 	if (bw != NULL && bw->bw_percent > 0) {
 		if (bw->bw_percent < 100)
 			printf("bandwidth %u%% ", bw->bw_percent);

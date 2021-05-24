@@ -251,11 +251,7 @@ pfctl_update_qstats(int dev, struct pf_altq_node **root, int opts)
 			pq.buf = &qstats.data;
 			pq.nbytes = sizeof(qstats.data);
 			pq.version = altq_stats_version(pa.altq.scheduler);
-			// Set clear flag
-			//if (opts & PF_OPT_CLRALTQ) {
-			  //printf("Skon - setting clear bit\n");
-			//  pq.clear = 1;
-			//}
+
 			if (ioctl(dev, DIOCGETQSTATS, &pq)) {
 				warn("DIOCGETQSTATS");
 				printf("In pfctl_update_qstats error\n");
@@ -363,23 +359,37 @@ static void
 print_hfsc_sc(const char *scname, u_int m1, u_int d, u_int m2,
     const struct node_hfsc_sc *sc)
 {
-        printf(" %s", scname);
-
+  if (!json)
+    printf(" %s", scname);
+  else
+    printf("\"%s\":",scname);
         if (d != 0) {
+	  if (!json)
                 printf("(");
-                if (sc != NULL && sc->m1.bw_percent > 0)
-                        printf("%u%%", sc->m1.bw_percent);
-                else
-                    	printf("%s", rate2str((double)m1));
-                printf(" %u", d);
+	  else
+	    printf("\"");
+	  if (sc != NULL && sc->m1.bw_percent > 0)
+	    printf("%u%%", sc->m1.bw_percent);
+	  else
+	    printf("%s", rate2str((double)m1));
+	  if (!json)
+	    printf(" ");
+	  printf("%u", d);
+	  if (json)
+	    printf("\"");
         }
-
+	if (json)
+            printf("\"");
+	if (!json)
+	  printf(" ");
         if (sc != NULL && sc->m2.bw_percent > 0)
-		printf(" %u%%", sc->m2.bw_percent);
+		printf("%u%%", sc->m2.bw_percent);
         else
-                printf(" %s", rate2str((double)m2));
-
+                printf("%s", rate2str((double)m2));
+	if (json)
+            printf("\"");
  	if (d != 0)
+	  if (!json)
                 printf(")");
 }
 
@@ -409,7 +419,7 @@ print_hfsc_opts(const struct pf_altq *a, const struct node_queue_opt *qopts)
 {
         const struct hfsc_opts_v1       *opts;
         const struct node_hfsc_sc       *rtsc, *lssc, *ulsc;
-
+	bool first = true;
         opts = &a->pq_u.hfsc_opts;
         if (qopts == NULL)
                 rtsc = lssc = ulsc = NULL;
@@ -422,33 +432,85 @@ print_hfsc_opts(const struct pf_altq *a, const struct node_queue_opt *qopts)
         if (opts->flags || opts->rtsc_m2 != 0 || opts->ulsc_m2 != 0 ||
             (opts->lssc_m2 != 0 && (opts->lssc_m2 != a->bandwidth ||
             opts->lssc_d != 0))) {
-                printf("hfsc(");
-                if (opts->flags & HFCF_RED)
-                        printf(" red");
-                if (opts->flags & HFCF_ECN)
-                        printf(" ecn");
-                if (opts->flags & HFCF_RIO)
-                        printf(" rio");
-                if (opts->flags & HFCF_CODEL)
-                        printf(" codel");
-                if (opts->flags & HFCF_CLEARDSCP)
-                        printf(" cleardscp");
-                if (opts->flags & HFCF_DEFAULTCLASS)
-                        printf(" default");
-                if (opts->rtsc_m2 != 0)
-                        print_hfsc_sc("realtime", opts->rtsc_m1, opts->rtsc_d,
-                            opts->rtsc_m2, rtsc);
-                if (opts->lssc_m2 != 0 && (opts->lssc_m2 != a->bandwidth ||
-                    opts->lssc_d != 0))
-                        print_hfsc_sc("linkshare", opts->lssc_m1, opts->lssc_d,
-                            opts->lssc_m2, lssc);
-                if (opts->ulsc_m2 != 0)
-                        print_hfsc_sc("upperlimit", opts->ulsc_m1, opts->ulsc_d,
-                            opts->ulsc_m2, ulsc);
-                printf(" ) ");
-   
+	  if (!json) {
+	    printf("hfsc(");
+	  } else {
+	    printf(",\"hfsc\":{\"flags\":[");
+	  }
+	  if (opts->flags & HFCF_RED) {
+		  if (!json)
+		    printf(" red");
+		  else
+		    printf("\"red\"");
+		  first=false;
+	  }
+	  if (opts->flags & HFCF_ECN) {
+		  if (!json)		  
+		    printf(" ecn");
+		  else {
+		    if (!first) printf(",");
+		    printf(",\"ecn\"");
+		  }
+	  }
+	  if (opts->flags & HFCF_RIO) {
+		  if (!json)		  
+		    printf(" rio");
+		  else {
+		    if (!first) printf(",");
+		    printf("\"rio\"");
+		  }
+	  }
+	  if (opts->flags & HFCF_CODEL) {
+		  if (!json)		  
+		    printf(" codel");
+		  else {
+		    if (!first) printf(",");
+		    printf("\"codel\"");
+		  }
+	  }
+	  if (opts->flags & HFCF_CLEARDSCP) {
+		  if (!json)		  
+		    printf(" cleardscp");
+		  else {
+		    if (!first) printf(",");
+		    printf("\"clearscp\"");
+		  }
+	  }
+	  if (opts->flags & HFCF_DEFAULTCLASS) {
+		  if (!json)		  
+		    printf(" default");
+		  else {
+		    if (!first) printf(",");
+		    printf("\"default\"");
+		  }
+	  }
+	  if (json)
+	    printf("]");
+	  if (opts->rtsc_m2 != 0) {
+	    if (json)
+	      printf(",");
+		  print_hfsc_sc("realtime", opts->rtsc_m1, opts->rtsc_d,
+				opts->rtsc_m2, rtsc);
+	  }
+	  if (opts->lssc_m2 != 0 && (opts->lssc_m2 != a->bandwidth ||
+				     opts->lssc_d != 0)) {
+	    if (json)
+	      printf(",");
+		print_hfsc_sc("linkshare", opts->lssc_m1, opts->lssc_d,
+			      opts->lssc_m2, lssc);
+	  }
+	  if (opts->ulsc_m2 != 0) {
+	    if (json)
+	      printf(",");
+	    print_hfsc_sc("upperlimit", opts->ulsc_m1, opts->ulsc_d,
+			  opts->ulsc_m2, ulsc);
+	  }
+	    if (!json)
+	      printf(" ) ");
+	    else
+	      printf("}");
                 return (1);
-        } else
+	  } else
                 return (0);
 }
 
@@ -475,7 +537,7 @@ print_queue(const struct pf_altq *a, unsigned int level,
 	    printf(" ");
 	  printf("%s ", a->qname);
 	} else {
-	  printf("\"%s \"", a->qname);
+	  printf("\"%s\"", a->qname);
         }
         if (print_interface) {
 	  if(!json) {
@@ -493,36 +555,37 @@ print_queue(const struct pf_altq *a, unsigned int level,
 		    } else {
 		      printf(",\"bandwidth\",\" %u%%\"", bw->bw_percent);
 		    }
-		  } else {
+		  }
+		} else {
 		    if (!json) {
                         printf("bandwidth %s ", rate2str((double)a->bandwidth));
 		    } else {
                          printf(",\"bandwidth\":\"%s\"", rate2str((double)a->bandwidth));
 		    }
 		  }
-		}
-		if (a->priority != DEFAULT_PRIORITY) {
-		  if (!json) {
-		    printf("priority %u ", a->priority);
-		  } else {
-		    printf(",\"priority\":\"%u\"", a->priority);
-		  }
-		}
-		if (a->qlimit != DEFAULT_QLIMIT) {
-		  if (!json) {
-		    printf("qlimit %u ", a->qlimit);
-		  } else {
-		    printf(",\"qlimit\":\"%u\"", a->qlimit);
-		  }
-		}
 	}
+	if (a->priority != DEFAULT_PRIORITY) {
+	  if (!json) {
+	    printf("priority %u ", a->priority);
+	  } else {
+	    printf(",\"priority\":\"%u\"", a->priority);
+	  }
+	}
+	if (a->qlimit != DEFAULT_QLIMIT) {
+	  if (!json) {
+	    printf("qlimit %u ", a->qlimit);
+	  } else {
+	    printf(",\"qlimit\":\"%u\"", a->qlimit);
+	  }
+	}
+		
         switch (a->scheduler) {
         case ALTQT_CBQ:
                 break;
         case ALTQT_PRIQ:
                 break;
         case ALTQT_HFSC:
-   	        if (!json)
+	  //if (!json)
                    print_hfsc_opts(a, qopts);
                 break;
         case ALTQT_FAIRQ:
@@ -535,6 +598,7 @@ void
 print_altq(const struct pf_altq *a, unsigned int level,
 	   struct node_queue_bw *bw, struct node_queue_opt *qopts)
 {
+
         if (a->qname[0] != 0) {
 	  print_queue(a, level, bw, 1, qopts);
                 return;
@@ -735,8 +799,8 @@ print_hfscstats(struct queue_stats cur)
 	   (unsigned long long)cur.data.hfsc_stats.xmit_cnt.bytes,
 	   (unsigned long long)cur.data.hfsc_stats.drop_cnt.packets,
 	   (unsigned long long)cur.data.hfsc_stats.drop_cnt.bytes);
-    printf(",\"qlength\":\"%d/%d\"",
-	   cur.data.hfsc_stats.qlength, cur.data.hfsc_stats.qlimit);
+    printf(",\"qlength\":\"%d\"",
+	   cur.data.hfsc_stats.qlength);
     
     if (cur.avgn < 2)
       return;
